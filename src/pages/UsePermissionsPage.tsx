@@ -1,6 +1,9 @@
+// src/pages/UserPermissionsPage.tsx
 import { useState, useEffect } from 'react';
 import { useTheme } from '../stores/theme.store';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
+import api from '../services/api';
 
 // ประเภทข้อมูลสำหรับผู้ใช้
 interface UserItem {
@@ -19,6 +22,8 @@ type SortOrder = 'asc' | 'desc';
 function UserPermissionsPage() {
   const { theme } = useTheme();
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [loading, setLoading] = useState(true); // เพิ่ม state สำหรับแสดงสถานะโหลด
+  const [error, setError] = useState<string | null>(null); // เพิ่ม state สำหรับแสดงข้อผิดพลาด
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [sortField, setSortField] = useState<SortField>('name');
@@ -26,92 +31,35 @@ function UserPermissionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStaff, setFilterStaff] = useState<string>('');
 
-  useEffect(() => {
-    // ข้อมูลตัวอย่าง (ในโปรเจคจริง ควรใช้ API เพื่อดึงข้อมูล)
-    const sampleUsers: UserItem[] = [
-      {
-        id: '1',
-        name: 'นายสมชาย ใจดี',
-        studentId: '65015001',
-        faculty: 'คณะวิทยาศาสตร์',
-        email: '65015001@up.ac.th',
-        isStaff: false,
-      },
-      {
-        id: '2',
-        name: 'นางสาวสมหญิง รักเรียน',
-        studentId: '65015002',
-        faculty: 'คณะวิศวกรรมศาสตร์',
-        email: '65015002@up.ac.th',
-        isStaff: true,
-      },
-      {
-        id: '3',
-        name: 'นายวิชัย เก่งกาจ',
-        studentId: '65015003',
-        faculty: 'คณะวิทยาศาสตร์',
-        email: '65015003@up.ac.th',
-        isStaff: false,
-      },
-      {
-        id: '4',
-        name: 'นางสาวแก้วตา สว่างศรี',
-        studentId: '65015004',
-        faculty: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
-        email: '65015004@up.ac.th',
-        isStaff: true,
-      },
-      {
-        id: '5',
-        name: 'นายภูมิ ปัญญาดี',
-        studentId: '65015005',
-        faculty: 'คณะวิศวกรรมศาสตร์',
-        email: '65015005@up.ac.th',
-        isStaff: false,
-      },
-      {
-        id: '6',
-        name: 'นางสาวนิภา ใจงาม',
-        studentId: '65015006',
-        faculty: 'คณะวิทยาศาสตร์',
-        email: '65015006@up.ac.th',
-        isStaff: true,
-      },
-      {
-        id: '7',
-        name: 'นายอนันต์ มากมี',
-        studentId: '65015007',
-        faculty: 'คณะวิศวกรรมศาสตร์',
-        email: '65015007@up.ac.th',
-        isStaff: false,
-      },
-      {
-        id: '8',
-        name: 'นางสาวกานดา รักดี',
-        studentId: '65015008',
-        faculty: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
-        email: '65015008@up.ac.th',
-        isStaff: false,
-      },
-      {
-        id: '9',
-        name: 'นายพงศกร เพียรเรียน',
-        studentId: '65015009',
-        faculty: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
-        email: '65015009@up.ac.th',
-        isStaff: true,
-      },
-      {
-        id: '10',
-        name: 'นางสาวมินตรา ใจซื่อ',
-        studentId: '65015010',
-        faculty: 'คณะวิทยาศาสตร์',
-        email: '65015010@up.ac.th',
-        isStaff: false,
-      },
-    ];
+  // ฟังก์ชันดึงข้อมูลผู้ใช้จาก API
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // เรียกใช้ API ดึงข้อมูลผู้ใช้
+      const response = await api.get('/admin/users');
+      
+      // แปลงข้อมูลจาก API ให้ตรงกับรูปแบบที่เราต้องการใช้
+      const formattedUsers: UserItem[] = response.data.map((user: any) => ({
+        id: user._id || user.id,
+        name: `${user.firstName || ''} ${user.lastName || ''}`,
+        studentId: user.studentId || '',
+        faculty: user.faculty || '',
+        email: user.email || '',
+        isStaff: user.role === 'staff'
+      }));
+      
+      setUsers(formattedUsers);
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
+      setError('เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้');
+      setLoading(false);
+    }
+  };
 
-    setUsers(sampleUsers);
+  useEffect(() => {
+    fetchUsers();
   }, []);
 
   // ฟังก์ชันเรียงข้อมูล
@@ -127,22 +75,46 @@ function UserPermissionsPage() {
   };
 
   // ฟังก์ชันจัดการการแต่งตั้ง staff
-  const handleAppoint = (id: string) => {
+  const handleAppoint = async (id: string) => {
     const confirmed = window.confirm('คุณต้องการแต่งตั้งผู้ใช้นี้เป็นเจ้าหน้าที่ใช่หรือไม่?');
     if (confirmed) {
-      setUsers(users.map(user => 
-        user.id === id ? { ...user, isStaff: true } : user
-      ));
+      try {
+        setLoading(true);
+        await api.put(`/admin/users/${id}/role`, { role: 'staff' });
+        
+        // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
+        setUsers(users.map(user => 
+          user.id === id ? { ...user, isStaff: true } : user
+        ));
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error appointing staff:', err);
+        alert('เกิดข้อผิดพลาดในการแต่งตั้งเจ้าหน้าที่');
+        setLoading(false);
+      }
     }
   };
 
   // ฟังก์ชันจัดการการยกเลิก staff
-  const handleRevoke = (id: string) => {
+  const handleRevoke = async (id: string) => {
     const confirmed = window.confirm('คุณต้องการยกเลิกตำแหน่งเจ้าหน้าที่ของผู้ใช้นี้ใช่หรือไม่?');
     if (confirmed) {
-      setUsers(users.map(user => 
-        user.id === id ? { ...user, isStaff: false } : user
-      ));
+      try {
+        setLoading(true);
+        await api.put(`/admin/users/${id}/role`, { role: 'student' });
+        
+        // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
+        setUsers(users.map(user => 
+          user.id === id ? { ...user, isStaff: false } : user
+        ));
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error revoking staff permission:', err);
+        alert('เกิดข้อผิดพลาดในการยกเลิกสิทธิ์เจ้าหน้าที่');
+        setLoading(false);
+      }
     }
   };
 
@@ -187,13 +159,42 @@ function UserPermissionsPage() {
   const currentItems = filteredAndSortedUsers.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
 
-  // กำหนดสี header bar ตามธีม
-  const getHeaderBarColor = () => {
-    return theme === 'dark' 
-      ? 'bg-blue-800' // โทนสีน้ำเงินเข้มสำหรับ Dark Mode
-      : 'bg-blue-600'; // โทนสีน้ำเงินสำหรับ Light Mode
-  };
+  // แสดงหน้าจอโหลด
+  if (loading) {
+    return (
+      <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
+          <p>กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
 
+  // แสดงข้อผิดพลาด
+  if (error) {
+    return (
+      <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <div className="text-center">
+          <div className="text-red-500 mb-2">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-xl font-semibold mb-2">เกิดข้อผิดพลาด</p>
+          <p>{error}</p>
+          <button 
+            onClick={() => fetchUsers()} 
+            className={`mt-4 px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+          >
+            ลองใหม่อีกครั้ง
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // โค้ดแสดงผลที่เหลือคงเดิม...
   return (
     <div className={`min-h-screen p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto">
@@ -246,7 +247,7 @@ function UserPermissionsPage() {
           theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
         }`}>
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className={`${getHeaderBarColor()} text-white`}>
+            <thead className={`${theme === 'dark' ? 'bg-blue-800' : 'bg-blue-600'} text-white`}>
               <tr>
                 <th
                   scope="col"
@@ -394,7 +395,7 @@ function UserPermissionsPage() {
                     colSpan={6}
                     className="px-6 py-4 text-center text-sm font-medium"
                   >
-                    ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา
+                    {searchTerm || filterStaff ? 'ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา' : 'ไม่พบข้อมูลผู้ใช้'}
                   </td>
                 </tr>
               )}
@@ -402,7 +403,7 @@ function UserPermissionsPage() {
           </table>
         </div>
         
-        {/* Pagination */}
+        {/* Pagination - คงเดิม */}
         {filteredAndSortedUsers.length > 0 && (
           <div className="flex justify-center mt-6">
             <nav className="flex items-center space-x-2">
