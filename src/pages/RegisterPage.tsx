@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRegister } from '../hooks/useRegister.hook';
 import { useAuth } from '../hooks/UseAuth.hook';
+import { getFacultiesAndMajorsApi, Faculty, Major } from '../services/facuties';
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -16,12 +17,34 @@ function RegisterPage() {
     major: ''
   });
   
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [major, setMajors] = useState<Major[]>([]);
+  const [errord, setError] = useState<string | null>(null);
+   const [formDatas, setFormDatas] = useState({ phone: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { registerUser, loading, error } = useRegister();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
+  useEffect(() => {
+  getFacultiesAndMajorsApi()
+        .then(({ faculties }) => {
+      
+        setFaculties(faculties);
+        console.log('Faculties API response:', faculties);
+        const allmajors = faculties.flatMap(faculty => faculty.majors);
+        setMajors(allmajors)  
+        
+      
+        })
+          
+      
+        .catch((err) => {
+          alert('ไม่สามารถโหลดข้อมูลคณะได้');
+          console.error('Faculties API error:', err);
+        });
+    }, []);
+  
   // Hide Navbar on Register page
   useEffect(() => {
     document.body.classList.add('register-page');
@@ -29,7 +52,16 @@ function RegisterPage() {
       document.body.classList.remove('register-page');
     };
   }, []);
-
+const handle_phonechange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // ตรวจสอบว่าเป็นตัวเลขหรือไม่
+    if (/[^0-9]/.test(value)) {
+      setError('กรุณากรอกเฉพาะตัวเลข 0-9');
+    } else {
+      setError(null); // ถ้าเป็นตัวเลข ลบข้อความแสดงข้อผิดพลาด
+      setFormDatas({ ...formDatas, phone: value });
+    }
+  };
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -124,14 +156,7 @@ function RegisterPage() {
   };
 
   // List of faculties for dropdown
-  const faculties = [
-    'คณะเทคโนโลยีสารสนเทศและการสื่อสาร',
-    'คณะเกษตรศาสตร์และทรัพยากรธรรมชาติ',
-    'คณะวิทยาศาสตร์',
-    'คณะวิทยาศาสตร์การแพทย์',
-    'คณะวิศวกรรมศาสตร์',
-    'คณะพยาบาลศาสตร์'
-  ];
+  
 
   return (
     <div className="min-h-screen flex">
@@ -300,18 +325,19 @@ function RegisterPage() {
                 <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   หมายเลขโทรศัพท์
                 </label>
-                <input
-                  type="text"
-                  id="phoneNumber"
-                  name="phoneNumber"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  placeholder="กรอกหมายเลขโทรศัพท์ 10 หลัก"
-                  className={`w-full px-3 py-2 border rounded-md ${
-                    errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
-                  } focus:outline-none focus:ring-1 focus:ring-blue-500`}
-                  maxLength={10}
-                />
+                    <input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        value={formDatas.phone}
+                        onChange={handle_phonechange}
+                        placeholder="กรุณากรอกเบอร์โทรศัพท์"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        required
+                      />
+                {/* แสดงข้อความแจ้งเตือนถ้ากรอกตัวอักษร */}
+                {errord && <p className="text-red-500 text-sm mt-2">{errord}</p>}
+          
                 {errors.phoneNumber && (
                   <p className="mt-1 text-sm text-red-500">{errors.phoneNumber}</p>
                 )}
@@ -322,20 +348,19 @@ function RegisterPage() {
                 <label htmlFor="faculty" className="block text-sm font-medium text-gray-700 mb-1">
                   คณะ
                 </label>
-                <select
-                  id="faculty"
-                  name="faculty"
-                  value={formData.faculty}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">-- เลือกคณะ --</option>
-                  {faculties.map((faculty) => (
-                    <option key={faculty} value={faculty}>
-                      {faculty}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                      id="faculty"
+                      name="faculty"
+                      value={formData.faculty}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+                      required
+                    >
+                      <option value="" disabled>กรุณาเลือกคณะหรือวิทยาลัย</option>
+                      {faculties.map((faculty) => (
+                        <option key={faculty.id} value={faculty.id}>{faculty.name}</option>
+                      ))}
+                    </select>
               </div>
 
               {/* Major */}
@@ -343,15 +368,22 @@ function RegisterPage() {
                 <label htmlFor="major" className="block text-sm font-medium text-gray-700 mb-1">
                   สาขาวิชา
                 </label>
-                <input
-                  type="text"
-                  id="major"
-                  name="major"
-                  value={formData.major}
-                  onChange={handleChange}
-                  placeholder="กรอกสาขาวิชา"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <select
+                    id="major"
+                    name="major"
+                    value={formData.major}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+                    required
+                    disabled={!formData.faculty} // Disable the select if no faculty is selected
+                  >
+                    <option value="" disabled>กรุณาเลือกสาขา</option>
+                    {major?.map((major) => (
+                      <option key={major.id} value={major.id}>
+                        {major.name}
+                      </option>
+                    ))}
+                  </select>
               </div>
             </div>
 
