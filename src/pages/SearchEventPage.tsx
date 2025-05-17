@@ -14,6 +14,9 @@ interface SearchFilterType {
   checked: boolean;
 }
 
+
+
+
 function SearchEventPage() {
   const location = useLocation();
   const navigate = useNavigate();
