@@ -211,65 +211,74 @@ function CreateEventPage() {
     return date.toISOString();
   };
 
-  // ส่งข้อมูลไปยัง API
-  const submitEventToApi = async () => {
-    try {
-      // ดึง token จาก localStorage
-      const authData = localStorage.getItem("authData");
-      if (!authData) {
-        setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
-        return null;
-      }
-
-      const { token } = JSON.parse(authData);
-
-      // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
-      const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
-      const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
-
-      // สร้าง payload ตามรูปแบบที่ API ต้องการ
-      const eventPayload = {
-        title: formData.title,
-        description: formData.description,
-        typeId: mapEventTypeToTypeId(formData.eventType),
-        location: formData.location,
-        startTime: startDateTime,
-        endTime: endDateTime,
-        maxParticipants: formData.maxParticipants,
-        imageUrl: "Hello.png", // ใช้ค่าคงที่ตามที่เห็นใน Swagger
-      };
-
-      console.log("Submitting event data to API:", eventPayload);
-
-      // ส่งข้อมูลไปยัง API โดยใช้ Bearer token สำหรับการยืนยันตัวตน
-      const response = await api.post("/api/activities", eventPayload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("API Response:", response.data);
-
-      return response.data;
-    } catch (error: any) {
-      console.error("เกิดข้อผิดพลาดในการส่งข้อมูล:", error);
-
-      if (error.response) {
-        console.error("Status:", error.response.status);
-        console.error("Data:", error.response.data);
-
-        // ตั้งค่าข้อความข้อผิดพลาดที่ได้รับจาก API
-        setApiError(
-          error.response.data?.message || "เกิดข้อผิดพลาดในการส่งข้อมูล"
-        );
-      } else {
-        setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-      }
-
+ // ปรับปรุงฟังก์ชัน submitEventToApi
+const submitEventToApi = async () => {
+  try {
+    // ปรับปรุงการดึง token จาก localStorage
+    const authData = localStorage.getItem("authData");
+    if (!authData) {
+      setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
       return null;
     }
-  };
+
+    // แปลงข้อมูล auth และดึง token
+    const parsedAuthData = JSON.parse(authData);
+    const token = parsedAuthData.token;
+    
+    if (!token) {
+      setApiError("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+      return null;
+    }
+
+    // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
+    const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
+    const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
+
+    // สร้าง payload สำหรับกิจกรรม
+    const eventPayload = {
+      title: formData.title,
+      description: formData.description,
+      typeId: mapEventTypeToTypeId(formData.eventType),
+      location: formData.location,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      maxParticipants: formData.maxParticipants,
+      imageUrl: "Hello.png", // ค่าเริ่มต้นตามที่เห็นใน Swagger
+    };
+
+    console.log("กำลังส่งข้อมูลกิจกรรมไปยัง API:", eventPayload);
+    console.log("ใช้ token สำหรับยืนยันตัวตน:", token);
+
+    // ส่งคำขอพร้อมกับ token ใน header Authorization
+    const response = await api.post("/api/activities", eventPayload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("การตอบกลับจาก API:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error("เกิดข้อผิดพลาดในการส่งข้อมูล:", error);
+
+    if (error.response) {
+      console.error("สถานะ:", error.response.status);
+      console.error("ข้อมูล:", error.response.data);
+
+      // กำหนดข้อความแสดงข้อผิดพลาดตามการตอบกลับ
+      if (error.response.status === 401) {
+        setApiError("ไม่มีสิทธิ์ในการสร้างกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      } else {
+        setApiError(error.response.data?.message || error.response.data?.error || "เกิดข้อผิดพลาดในการส่งข้อมูล");
+      }
+    } else {
+      setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    }
+
+    return null;
+  }
+};
 
   // จัดการการส่งฟอร์ม
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
