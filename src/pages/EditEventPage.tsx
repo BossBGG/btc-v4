@@ -72,86 +72,95 @@ function EditEventPage() {
   };
   
   // โหลดข้อมูลกิจกรรมเดิมเมื่อเริ่มต้น component
-  useEffect(() => {
-    if (!id) {
+useEffect(() => {
+  // หากไม่มี id จาก URL params ให้ลองดึงจาก localStorage
+  let activityId = id;
+  if (!activityId) {
+    const lastCreatedId = localStorage.getItem('lastCreatedActivityId');
+    if (lastCreatedId) {
+      activityId = lastCreatedId;
+      // ทำการอัพเดท URL เพื่อให้ตรงกับข้อมูล
+      navigate(`/edit-event/${lastCreatedId}`, { replace: true });
+    } else {
       setApiError("ไม่พบรหัสกิจกรรมที่ต้องการแก้ไข");
       setIsLoading(false);
       return;
     }
+  }
+  
+  const fetchEvent = async () => {
+    setIsLoading(true);
     
-    const fetchEvent = async () => {
-      setIsLoading(true);
+    try {
+      // เรียกใช้ API getEventById จาก eventService
+      const response = await api.get(`/api/activities/${activityId}`);
+      const eventData = response.data;
       
-      try {
-        // ในโปรเจคจริงควรเรียก API getEventById จาก eventService
-        const response = await api.get(`/api/activities/${id}`);
-        const eventData = response.data;
-        
-        // แปลงข้อมูลจาก API เป็นรูปแบบที่ฟอร์มต้องการ
-        const startDate = formatISOToThai(eventData.startTime);
-        const endDate = formatISOToThai(eventData.endTime);
-        const startTime = extractTimeFromISO(eventData.startTime);
-        const endTime = extractTimeFromISO(eventData.endTime);
-        
-        setFormData({
-          title: eventData.title || '',
-          eventType: mapTypeIdToEventType(eventData.typeId),
-          description: eventData.description || '',
-          startDate,
-          endDate,
-          startTime,
-          endTime,
-          location: eventData.location || '',
-          maxParticipants: eventData.maxParticipants || 0,
-          score: eventData.score || 0,
-          hours: eventData.hours || 0,
-          image: null,
-          previewImage: eventData.imageUrl ? `https://bootcampp.karinwdev.site${eventData.imageUrl}` : null,
-          approvalStatus: eventData.approvalStatus || 'รออนุมัติ'
-        });
-        
-        setIsLoading(false);
-      } catch (error: any) {
-        console.error('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:', error);
-        
-        if (error.response) {
-          if (error.response.status === 404) {
-            setApiError(`ไม่พบกิจกรรมรหัส ${id}`);
-          } else {
-            setApiError(error.response.data?.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
-          }
+      // แปลงข้อมูลจาก API เป็นรูปแบบที่ฟอร์มต้องการ
+      const startDate = formatISOToThai(eventData.startTime);
+      const endDate = formatISOToThai(eventData.endTime);
+      const startTime = extractTimeFromISO(eventData.startTime);
+      const endTime = extractTimeFromISO(eventData.endTime);
+      
+      setFormData({
+        title: eventData.title || '',
+        eventType: mapTypeIdToEventType(eventData.typeId),
+        description: eventData.description || '',
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        location: eventData.location || '',
+        maxParticipants: eventData.maxParticipants || 0,
+        score: eventData.score || 0,
+        hours: eventData.hours || 0,
+        image: null,
+        previewImage: eventData.imageUrl ? `https://bootcampp.karinwdev.site${eventData.imageUrl}` : null,
+        approvalStatus: eventData.approvalStatus || 'รออนุมัติ'
+      });
+      
+      setIsLoading(false);
+    } catch (error: any) {
+      console.error('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:', error);
+      
+      if (error.response) {
+        if (error.response.status === 404) {
+          setApiError(`ไม่พบกิจกรรมรหัส ${activityId}`);
         } else {
-          setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+          setApiError(error.response.data?.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
         }
-        
-        // สร้างข้อมูลตัวอย่างสำหรับการทดสอบ UI
-        const mockEventData = {
-          title: `กิจกรรม ${id}`,
-          eventType: Number(id) % 3 === 0 ? 'ช่วยงาน' : Number(id) % 2 === 0 ? 'อาสา' : 'อบรม' as EventType,
-          description: `รายละเอียดกิจกรรม ${id} ที่กำลังแก้ไข ซึ่งเป็นข้อมูลตัวอย่างสำหรับการทดสอบ`,
-          startDate: '01/06/2568',
-          endDate: '02/06/2568',
-          startTime: '09:00',
-          endTime: '17:00',
-          location: 'อาคาร IT มหาวิทยาลัย',
-          maxParticipants: 30 + Number(id),
-          score: 3,
-          hours: 6,
-          previewImage: null,
-          approvalStatus: Number(id) % 3 === 0 ? 'ไม่อนุมัติ' : Number(id) % 2 === 0 ? 'รออนุมัติ' : 'อนุมัติ' as ApprovalStatus
-        };
-        
-        setFormData({
-          ...formData,
-          ...mockEventData
-        });
-        
-        setIsLoading(false);
+      } else {
+        setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
       }
-    };
-    
-    fetchEvent();
-  }, [id]);
+      
+      // สร้างข้อมูลตัวอย่างสำหรับการทดสอบ UI
+      const mockEventData = {
+        title: `กิจกรรม ${activityId}`,
+        eventType: Number(activityId) % 3 === 0 ? 'ช่วยงาน' : Number(activityId) % 2 === 0 ? 'อาสา' : 'อบรม' as EventType,
+        description: `รายละเอียดกิจกรรม ${activityId} ที่กำลังแก้ไข ซึ่งเป็นข้อมูลตัวอย่างสำหรับการทดสอบ`,
+        startDate: '01/06/2568',
+        endDate: '02/06/2568',
+        startTime: '09:00',
+        endTime: '17:00',
+        location: 'อาคาร IT มหาวิทยาลัย',
+        maxParticipants: 30 + Number(activityId),
+        score: 3,
+        hours: 6,
+        previewImage: null,
+        approvalStatus: Number(activityId) % 3 === 0 ? 'ไม่อนุมัติ' : Number(activityId) % 2 === 0 ? 'รออนุมัติ' : 'อนุมัติ' as ApprovalStatus
+      };
+      
+      setFormData({
+        ...formData,
+        ...mockEventData
+      });
+      
+      setIsLoading(false);
+    }
+  };
+  
+  fetchEvent();
+}, [id, navigate]);
   
   // ฟังก์ชันช่วยแปลง typeId เป็น eventType
   const mapTypeIdToEventType = (typeId: string): EventType => {

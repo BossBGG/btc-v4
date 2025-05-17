@@ -281,38 +281,46 @@ const submitEventToApi = async () => {
 };
 
   // จัดการการส่งฟอร์ม
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  // จัดการการส่งฟอร์ม
+const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
 
-    // ตรวจสอบความถูกต้องของฟอร์ม
-    if (!validateForm()) {
-      return;
+  // ตรวจสอบความถูกต้องของฟอร์ม
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsSubmitting(true);
+  setApiError(null);
+
+  try {
+    // ส่งข้อมูลไปยัง API
+    const result = await submitEventToApi();
+
+    if (result) {
+      // เก็บค่า activityId จากผลลัพธ์ (ตามที่เห็นในรูปภาพ API response จะมี activityId)
+      const activityId = result.activityId;
+      console.log("ได้รับ activityId จาก API:", activityId);
+      
+      // บันทึก activityId ลงใน localStorage เพื่อใช้ในหน้า EditEventPage
+      localStorage.setItem('lastCreatedActivityId', activityId.toString());
+
+      // แสดงข้อความแจ้งเตือนเมื่อสร้างกิจกรรมสำเร็จ
+      setSuccessMessage(
+        `ส่งคำขอสร้างกิจกรรมสำเร็จ! รหัสกิจกรรมของคุณคือ ${activityId} รอการอนุมัติจากผู้ดูแลระบบ`
+      );
+
+      // รอ 2 วินาทีแล้วนำทางไปยังหน้าแก้ไขกิจกรรมพร้อมกับ ID
+      setTimeout(() => {
+        navigate(`/edit-event/${activityId}`);
+      }, 2000);
     }
-
-    setIsSubmitting(true);
-    setApiError(null);
-
-    try {
-      // ส่งข้อมูลไปยัง API
-      const result = await submitEventToApi();
-
-      if (result) {
-        // แสดงข้อความแจ้งเตือนเมื่อสร้างกิจกรรมสำเร็จ
-        setSuccessMessage(
-          "ส่งคำขอสร้างกิจกรรมสำเร็จ! รอการอนุมัติจากผู้ดูแลระบบ"
-        );
-
-        // รอ 2 วินาทีแล้วนำทางกลับไปหน้าแดชบอร์ด
-        setTimeout(() => {
-          navigate("/staff-dashboard");
-        }, 2000);
-      }
-    } catch (error) {
-      console.error("เกิดข้อผิดพลาดในการสร้างกิจกรรม:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  } catch (error) {
+    console.error("เกิดข้อผิดพลาดในการสร้างกิจกรรม:", error);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // ฟังก์ชันสำหรับการจัดรูปแบบวันที่ (DD/MM/YYYY)
   const formatDate = (e: ChangeEvent<HTMLInputElement>) => {

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../stores/theme.store';
-import { Link } from 'react-router-dom';
-import { mockEventsWithApproval } from '../data/mockEventsWithApproval';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/UseAuth.hook';
+import api from '../services/api';
 
 // ประเภทข้อมูลสำหรับกิจกรรม
 interface ActivityItem {
-  id: string;
+  id: string | number;
   title: string;
   eventType: 'อบรม' | 'อาสา' | 'ช่วยงาน';
   startDate: string;
@@ -26,6 +26,7 @@ type SortOrder = 'asc' | 'desc';
 function StaffActivitiesPage() {
   const { theme } = useTheme();
   const { userId } = useAuth();
+  const navigate = useNavigate();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
@@ -34,123 +35,138 @@ function StaffActivitiesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // ข้อมูลตัวอย่าง (ในโปรเจคจริง ควรใช้ API เพื่อดึงข้อมูล)
-    // แปลงข้อมูลจาก mockEventsWithApproval เป็นรูปแบบที่ต้องการ
-    const staffActivities: ActivityItem[] = mockEventsWithApproval
-      .filter(event => event.createdBy === userId) // กรองเฉพาะกิจกรรมที่สร้างโดย staff ที่กำลังใช้งาน
-      .map(event => ({
-        id: String(event.id), // แปลง id เป็น string เสมอ
-        title: event.title,
-        eventType: event.eventType,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        approvalStatus: event.approvalStatus,
-        status: Math.random() > 0.7 ? 'เสร็จสิ้น' : Math.random() > 0.4 ? 'กำลังดำเนินการ' : 'รับสมัคร', // สุ่มสถานะสำหรับข้อมูลตัวอย่าง
-        hours: event.hours,
-        participants: Math.floor(Math.random() * event.maxParticipants), // สุ่มจำนวนผู้เข้าร่วมสำหรับข้อมูลตัวอย่าง
-        maxParticipants: event.maxParticipants,
-        createdBy: event.createdBy
-      }));
-
-    // เพิ่มข้อมูลเพิ่มเติมสำหรับตัวอย่าง
-    const additionalActivities: ActivityItem[] = [
-      {
-        id: '101',
-        title: 'อบรมเทคนิคการสร้างแอพพลิเคชั่นมือถือ',
-        eventType: 'อบรม',
-        startDate: '01/06/2568',
-        endDate: '02/06/2568',
-        approvalStatus: 'อนุมัติ',
-        status: 'รับสมัคร',
-        hours: 8,
-        participants: 12,
-        maxParticipants: 40,
-        createdBy: userId || ''
-      },
-      {
-        id: '102',
-        title: 'โครงการปลูกป่าชายเลนเฉลิมพระเกียรติ',
-        eventType: 'อาสา',
-        startDate: '10/06/2568',
-        endDate: '10/06/2568',
-        approvalStatus: 'รออนุมัติ',
-        status: 'รับสมัคร',
-        hours: 6,
-        participants: 15,
-        maxParticipants: 60,
-        createdBy: userId || ''
-      },
-      {
-        id: '103',
-        title: 'ช่วยงานแนะแนวการศึกษา',
-        eventType: 'ช่วยงาน',
-        startDate: '15/06/2568',
-        endDate: '16/06/2568',
-        approvalStatus: 'อนุมัติ',
-        status: 'รับสมัคร',
-        hours: 10,
-        participants: 8,
-        maxParticipants: 20,
-        createdBy: userId || ''
-      },
-      {
-        id: '104',
-        title: 'อบรมการเขียนโปรแกรมด้วย Python',
-        eventType: 'อบรม',
-        startDate: '05/05/2568',
-        endDate: '06/05/2568',
-        approvalStatus: 'อนุมัติ',
-        status: 'กำลังดำเนินการ',
-        hours: 12,
-        participants: 38,
-        maxParticipants: 45,
-        createdBy: userId || ''
-      },
-      {
-        id: '105',
-        title: 'โครงการทาสีโรงเรียนเพื่อน้อง',
-        eventType: 'อาสา',
-        startDate: '01/04/2568',
-        endDate: '02/04/2568',
-        approvalStatus: 'อนุมัติ',
-        status: 'เสร็จสิ้น',
-        hours: 16,
-        participants: 35,
-        maxParticipants: 35,
-        createdBy: userId || ''
-      },
-      {
-        id: '106',
-        title: 'ช่วยงานสัปดาห์วิทยาศาสตร์',
-        eventType: 'ช่วยงาน',
-        startDate: '15/03/2568',
-        endDate: '20/03/2568',
-        approvalStatus: 'อนุมัติ',
-        status: 'เสร็จสิ้น',
-        hours: 30,
-        participants: 20,
-        maxParticipants: 25,
-        createdBy: userId || ''
-      },
-      {
-        id: '107',
-        title: 'อบรมภาษาอังกฤษเพื่อการสื่อสาร',
-        eventType: 'อบรม',
-        startDate: '10/02/2568',
-        endDate: '11/02/2568',
-        approvalStatus: 'ไม่อนุมัติ',
-        status: 'ยกเลิก',
-        hours: 8,
-        participants: 0,
-        maxParticipants: 40,
-        createdBy: userId || ''
-      }
-    ];
-
-    setActivities([...staffActivities, ...additionalActivities]);
+    fetchActivities();
   }, [userId]);
+
+  // ดึงข้อมูลกิจกรรมจาก API
+  const fetchActivities = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+
+      // ดึง token จาก localStorage
+      const authData = localStorage.getItem("authData");
+      if (!authData) {
+        setErrorMessage("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+        setIsLoading(false);
+        return;
+      }
+
+      // แปลงข้อมูล auth และดึง token
+      const parsedAuthData = JSON.parse(authData);
+      const token = parsedAuthData.token;
+      
+      if (!token) {
+        setErrorMessage("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("กำลังดึงข้อมูลกิจกรรมที่สร้างโดยผู้ใช้...");
+      
+      // เรียกใช้ API เพื่อดึงข้อมูลกิจกรรมที่สร้างโดยผู้ใช้
+      const response = await api.get('/api/activities/get-created', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      console.log("ข้อมูลกิจกรรมที่ได้รับ:", response.data);
+
+      if (response.data && response.data.activities) {
+        // แปลงข้อมูลจาก API เป็นรูปแบบที่ต้องการใช้
+        const formattedActivities = response.data.activities.map((activity: any) => {
+          // แปลง startTime และ endTime เป็นรูปแบบ DD/MM/YYYY
+          const startDate = formatDateFromISO(activity.startTime);
+          const endDate = formatDateFromISO(activity.endTime);
+          
+          // แปลงสถานะให้อยู่ในรูปแบบที่เข้าใจง่าย
+          const status = mapStatusToDisplay(activity.status);
+          
+          // แปลงสถานะการอนุมัติ (ตามข้อมูลที่มี)
+          const approvalStatus = activity.approvalStatus || 'รออนุมัติ';
+          
+          return {
+            id: activity.id,
+            title: activity.title,
+            eventType: activity.type?.name || 'อบรม',
+            startDate,
+            endDate,
+            approvalStatus,
+            status,
+            hours: activity.hours || 0,
+            participants: activity.currentParticipants || 0,
+            maxParticipants: activity.maxParticipants,
+            createdBy: userId || ''
+          };
+        });
+
+        setActivities(formattedActivities);
+      }
+    } catch (error: any) {
+      console.error("เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:", error);
+      
+      if (error.response) {
+        if (error.response.status === 401) {
+          setErrorMessage("ไม่มีสิทธิ์ในการดูข้อมูลกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+        } else {
+          setErrorMessage(`เกิดข้อผิดพลาด: ${error.response.data?.message || error.message}`);
+        }
+      } else {
+        setErrorMessage("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // แปลงวันที่จาก ISO เป็นรูปแบบ DD/MM/YYYY
+  const formatDateFromISO = (isoDate: string): string => {
+    if (!isoDate) return '';
+    
+    const date = new Date(isoDate);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
+    
+    return `${day}/${month}/${year}`;
+  };
+
+  // แปลงสถานะกิจกรรมให้เป็นภาษาไทย
+  const mapStatusToDisplay = (status: string): 'รับสมัคร' | 'กำลังดำเนินการ' | 'เสร็จสิ้น' | 'ยกเลิก' => {
+    switch (status) {
+      case 'open':
+        return 'รับสมัคร';
+      case 'in_progress':
+        return 'กำลังดำเนินการ';
+      case 'closed':
+        return 'เสร็จสิ้น';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return 'รับสมัคร';
+    }
+  };
+
+  // แปลงสถานะจากภาษาไทยเป็นค่าที่ส่งไป API
+  const mapDisplayToStatus = (statusDisplay: string): string => {
+    switch (statusDisplay) {
+      case 'รับสมัคร':
+        return 'open';
+      case 'กำลังดำเนินการ':
+        return 'in_progress';
+      case 'เสร็จสิ้น':
+        return 'closed';
+      case 'ยกเลิก':
+        return 'cancelled';
+      default:
+        return 'open';
+    }
+  };
 
   // ฟังก์ชันเรียงข้อมูล
   const sortActivities = (field: SortField) => {
@@ -165,22 +181,104 @@ function StaffActivitiesPage() {
   };
 
   // ฟังก์ชันจัดการการปิดกิจกรรม
-  const handleCloseActivity = (id: string) => {
+  const handleCloseActivity = async (id: string | number) => {
     const confirmed = window.confirm('คุณต้องการปิดกิจกรรมนี้ใช่หรือไม่? นิสิตที่เข้าร่วมจะได้รับคะแนนและชั่วโมงกิจกรรม');
     if (confirmed) {
-      setActivities(activities.map(activity => 
-        activity.id === id ? { ...activity, status: 'เสร็จสิ้น' } : activity
-      ));
+      try {
+        // ดึง token จาก localStorage
+        const authData = localStorage.getItem("authData");
+        if (!authData) {
+          alert("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // แปลงข้อมูล auth และดึง token
+        const parsedAuthData = JSON.parse(authData);
+        const token = parsedAuthData.token;
+        
+        if (!token) {
+          alert("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // เรียกใช้ API เพื่อเปลี่ยนสถานะกิจกรรมเป็น 'closed'
+        const response = await api.put(`/api/activities/${id}/status`, {
+          status: "closed"
+        }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log("API response:", response.data);
+
+        // อัพเดตข้อมูลในหน้าจอ
+        setActivities(activities.map(activity => 
+          activity.id === id ? { ...activity, status: 'เสร็จสิ้น' } : activity
+        ));
+
+        alert('ปิดกิจกรรมเรียบร้อยแล้ว');
+      } catch (error: any) {
+        console.error("เกิดข้อผิดพลาดในการปิดกิจกรรม:", error);
+        
+        if (error.response) {
+          alert(`เกิดข้อผิดพลาด: ${error.response.data?.message || error.message}`);
+        } else {
+          alert("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+        }
+      }
     }
   };
 
   // ฟังก์ชันจัดการการยกเลิกกิจกรรม
-  const handleCancelActivity = (id: string) => {
+  const handleCancelActivity = async (id: string | number) => {
     const confirmed = window.confirm('คุณต้องการยกเลิกกิจกรรมนี้ใช่หรือไม่? นิสิตที่เข้าร่วมจะไม่ได้รับคะแนนและชั่วโมงกิจกรรม');
     if (confirmed) {
-      setActivities(activities.map(activity => 
-        activity.id === id ? { ...activity, status: 'ยกเลิก' } : activity
-      ));
+      try {
+        // ดึง token จาก localStorage
+        const authData = localStorage.getItem("authData");
+        if (!authData) {
+          alert("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // แปลงข้อมูล auth และดึง token
+        const parsedAuthData = JSON.parse(authData);
+        const token = parsedAuthData.token;
+        
+        if (!token) {
+          alert("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+          return;
+        }
+
+        // เรียกใช้ API เพื่อเปลี่ยนสถานะกิจกรรมเป็น 'cancelled'
+        const response = await api.put(`/api/activities/${id}/status`, {
+          status: "cancelled"
+        }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log("API response:", response.data);
+
+        // อัพเดตข้อมูลในหน้าจอ
+        setActivities(activities.map(activity => 
+          activity.id === id ? { ...activity, status: 'ยกเลิก' } : activity
+        ));
+
+        alert('ยกเลิกกิจกรรมเรียบร้อยแล้ว');
+      } catch (error: any) {
+        console.error("เกิดข้อผิดพลาดในการยกเลิกกิจกรรม:", error);
+        
+        if (error.response) {
+          alert(`เกิดข้อผิดพลาด: ${error.response.data?.message || error.message}`);
+        } else {
+          alert("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+        }
+      }
     }
   };
 
@@ -275,6 +373,15 @@ function StaffActivitiesPage() {
       : 'bg-blue-600'; // โทนสีน้ำเงินสำหรับ Light Mode
   };
 
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen flex justify-center items-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="ml-4 text-xl">กำลังโหลดข้อมูลกิจกรรม...</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto">
@@ -294,6 +401,23 @@ function StaffActivitiesPage() {
             สร้างกิจกรรมใหม่
           </Link>
         </div>
+
+        {errorMessage && (
+          <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-md">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              onClick={fetchActivities}
+              className="mt-2 px-4 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        )}
         
         {/* ส่วนค้นหาและตัวกรอง */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -481,7 +605,8 @@ function StaffActivitiesPage() {
                   className="px-4 py-3 text-center text-sm font-medium whitespace-nowrap"
                 >
                   การจัดการ
-                </th>
+
+                  </th>
               </tr>
             </thead>
             <tbody className={`divide-y ${
