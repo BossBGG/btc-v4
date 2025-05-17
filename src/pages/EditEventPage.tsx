@@ -1,6 +1,7 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../stores/theme.store';
+import api from '../services/api';
 
 // ประเภทของกิจกรรม
 type EventType = 'อบรม' | 'อาสา' | 'ช่วยงาน';
@@ -199,32 +200,111 @@ function EditEventPage() {
     // ถ้าไม่มีข้อผิดพลาด (ค่าความยาวของ Object.keys(newErrors) เป็น 0) จะคืนค่า true
     return Object.keys(newErrors).length === 0;
   };
+ // แก้ไขฟังก์ชัน handleSubmit ใน EditEventPage.tsx
+const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
   
-  // จัดการการส่งฟอร์ม
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    // ตรวจสอบความถูกต้องของฟอร์ม
-    if (!validateForm()) {
+  // ตรวจสอบว่ามี id หรือไม่
+  if (!id) {
+    alert("ไม่พบรหัสกิจกรรมที่ต้องการแก้ไข");
+    return;
+  }
+  
+  // ตรวจสอบความถูกต้องของฟอร์ม
+  if (!validateForm()) {
+    return;
+  }
+  
+  setIsSubmitting(true);
+  
+  try {
+    // ดึง token จาก localStorage
+    const authData = localStorage.getItem("authData");
+    if (!authData) {
+      alert("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+      setIsSubmitting(false);
       return;
     }
+
+    // แปลงข้อมูล auth และดึง token
+    const parsedAuthData = JSON.parse(authData);
+    const token = parsedAuthData.token;
     
-    setIsSubmitting(true);
-    
-    // จำลองการส่งข้อมูลไปยัง API
-    setTimeout(() => {
-      console.log('ข้อมูลที่ส่ง:', formData);
-      
-      // แสดงข้อความแจ้งเตือนเมื่อส่งสำเร็จ
-      alert('แก้ไขกิจกรรมสำเร็จ!');
-      
-      // นำทางกลับไปหน้ารายการกิจกรรม
-      navigate('/staff/activities');
-      
+    if (!token) {
+      alert("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
       setIsSubmitting(false);
-    }, 1000);
-  };
-  
+      return;
+    }
+
+    // แปลงรูปแบบวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
+    const formatDateToRFC3339 = (dateString: string, timeString: string = "00:00") => {
+      // แยกวันที่และแปลงเป็นตัวเลข
+      const [day, month, year] = dateString.split('/').map(Number);
+      const [hours, minutes] = timeString.split(':').map(Number);
+      
+      // แปลงปี พ.ศ. เป็น ค.ศ.
+      const gregorianYear = year - 543;
+      
+      // สร้าง Date object (เดือนใน JavaScript เริ่มจาก 0)
+      const date = new Date(gregorianYear, month - 1, day, hours, minutes);
+      
+      // สร้างรูปแบบ RFC 3339 (ISO 8601)
+      return date.toISOString();
+    };
+
+    // สร้าง payload สำหรับการอัพเดทกิจกรรม
+    const eventPayload = {
+      title: formData.title,
+      description: formData.description,
+      typeId: mapEventTypeToTypeId(formData.eventType),
+      location: formData.location,
+      startTime: formatDateToRFC3339(formData.startDate),
+      endTime: formatDateToRFC3339(formData.endDate),
+      maxParticipants: formData.maxParticipants,
+      imageUrl: "hi.png", // ใช้ค่าเริ่มต้นตามที่เห็นใน Swagger
+    };
+
+    console.log(`กำลังส่งคำขอแก้ไขกิจกรรมรหัส ${id} ไปยัง API`);
+    console.log("ข้อมูลที่ส่ง:", eventPayload);
+    console.log("ใช้ token:", token);
+
+    // ส่งคำขอ PUT ไปยัง API โดยใส่ ID ในพาธ URL
+    const response = await api.put(`/api/activities/${id}`, eventPayload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("การตอบกลับจาก API:", response.data);
+    
+    // แสดงข้อความแจ้งเตือนเมื่อแก้ไขสำเร็จ
+    alert('แก้ไขกิจกรรมสำเร็จ!');
+    
+    // นำทางกลับไปหน้ารายการกิจกรรม
+    navigate('/staff/activities');
+  } catch (error: any) {
+    console.error(`เกิดข้อผิดพลาดในการแก้ไขกิจกรรมรหัส ${id}:`, error);
+
+    if (error.response) {
+      console.error("สถานะ:", error.response.status);
+      console.error("ข้อมูล:", error.response.data);
+
+      // แสดงข้อความแจ้งเตือนข้อผิดพลาด
+      if (error.response.status === 401) {
+        alert("ไม่มีสิทธิ์ในการแก้ไขกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      } else if (error.response.status === 404) {
+        alert(`ไม่พบกิจกรรมรหัส ${id}`);
+      } else {
+        alert(error.response.data?.message || error.response.data?.error || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล");
+      }
+    } else {
+      alert("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   // ฟังก์ชันสำหรับการจัดรูปแบบวันที่ (DD/MM/YYYY)
   const formatDate = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
