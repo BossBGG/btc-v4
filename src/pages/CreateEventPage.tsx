@@ -1,12 +1,7 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../stores/theme.store";
-import React from "react";
 import useEvent from "../hooks/useEvent.hook";
-import {
-  formatDateToRFC3339,
-  eventTypeToTypeId,
-} from "../services/eventService";
 import { useAuth } from "../hooks/UseAuth.hook";
 import api from "../services/api";
 
@@ -28,18 +23,6 @@ interface EventFormData {
   hours: number;
   image: File | null;
   previewImage: string | null;
-}
-
-// ข้อมูลที่จะส่งไปยัง API
-interface CreateEventApiPayload {
-  title: string;
-  description: string;
-  typeId: string; // ตามที่ Swagger กำหนดให้เป็น string ที่เป็นตัวเลข "1", "2", หรือ "3"
-  location: string;
-  startTime: string; // RFC 3339 format
-  endTime: string; // RFC 3339 format
-  maxParticipants: number;
-  imageUrl: string;
 }
 
 function CreateEventPage() {
@@ -212,6 +195,22 @@ function CreateEventPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // ฟังก์ชันสำหรับแปลงวันที่จาก DD/MM/YYYY เป็น RFC 3339
+  const formatDateToRFC3339 = (dateString: string, timeString: string) => {
+    // แยกวันที่และแปลงเป็นตัวเลข
+    const [day, month, year] = dateString.split('/').map(Number);
+    const [hours, minutes] = timeString.split(':').map(Number);
+    
+    // แปลงปี พ.ศ. เป็น ค.ศ.
+    const gregorianYear = year - 543;
+    
+    // สร้าง Date object (เดือนใน JavaScript เริ่มจาก 0)
+    const date = new Date(gregorianYear, month - 1, day, hours, minutes);
+    
+    // สร้างรูปแบบ RFC 3339 (ISO 8601)
+    return date.toISOString();
+  };
+
   // ส่งข้อมูลไปยัง API
   const submitEventToApi = async () => {
     try {
@@ -224,17 +223,20 @@ function CreateEventPage() {
 
       const { token } = JSON.parse(authData);
 
-      // แปลงข้อมูลจากฟอร์มให้ตรงกับรูปแบบที่ API ต้องการ
-      const eventPayload: CreateEventApiPayload = {
+      // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
+      const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
+      const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
+
+      // สร้าง payload ตามรูปแบบที่ API ต้องการ
+      const eventPayload = {
         title: formData.title,
         description: formData.description,
         typeId: mapEventTypeToTypeId(formData.eventType),
         location: formData.location,
-        startTime: formatDateToRFC3339(formData.startDate, formData.startTime),
-        endTime: formatDateToRFC3339(formData.endDate, formData.endTime),
+        startTime: startDateTime,
+        endTime: endDateTime,
         maxParticipants: formData.maxParticipants,
-        imageUrl:
-          formData.previewImage || "https://placehold.co/600x400?text=No+Image", // ใช้ placeholder ถ้าไม่มีรูป
+        imageUrl: "Hello.png", // ใช้ค่าคงที่ตามที่เห็นใน Swagger
       };
 
       console.log("Submitting event data to API:", eventPayload);
@@ -421,350 +423,348 @@ function CreateEventPage() {
               )}
             </div>
 
-           
-
-          {/* ประเภทกิจกรรม */}
-          <div className="mb-6">
-            <label
-              htmlFor="eventType"
-              className="block text-sm font-medium mb-2"
-            >
-              ประเภทกิจกรรม
-            </label>
-            <div className="relative">
-              <select
-                id="eventType"
-                name="eventType"
-                value={formData.eventType}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 rounded-md appearance-none ${
-                  theme === "dark"
-                    ? "bg-gray-700 border-gray-600 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                } border`}
+            {/* ประเภทกิจกรรม */}
+            <div className="mb-6">
+              <label
+                htmlFor="eventType"
+                className="block text-sm font-medium mb-2"
               >
-                <option value="อบรม">อบรม</option>
-                <option value="อาสา">อาสา</option>
-                <option value="ช่วยงาน">ช่วยงาน</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
+                ประเภทกิจกรรม
+              </label>
+              <div className="relative">
+                <select
+                  id="eventType"
+                  name="eventType"
+                  value={formData.eventType}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2 rounded-md appearance-none ${
+                    theme === "dark"
+                      ? "bg-gray-700 border-gray-600 text-white"
+                      : "bg-white border-gray-300 text-gray-900"
+                  } border`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                  <option value="อบรม">อบรม</option>
+                  <option value="อาสา">อาสา</option>
+                  <option value="ช่วยงาน">ช่วยงาน</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* รายละเอียดกิจกรรม */}
-          <div className="mb-6">
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium mb-2"
-            >
-              รายละเอียดกิจกรรม
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              className={`w-full px-4 py-2 rounded-md ${
-                theme === "dark"
-                  ? "bg-gray-700 border-gray-600 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              } border ${errors.description ? "border-red-500" : ""}`}
-              placeholder="กรุณากรอกรายละเอียดกิจกรรม"
-            />
-            {errors.description && (
-              <p className="mt-1 text-sm text-red-500">{errors.description}</p>
-            )}
-          </div>
-
-          {/* วันที่เริ่มต้น-วันที่สิ้นสุด */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* วันที่เริ่มต้น */}
-            <div>
+            {/* รายละเอียดกิจกรรม */}
+            <div className="mb-6">
               <label
-                htmlFor="startDate"
+                htmlFor="description"
                 className="block text-sm font-medium mb-2"
               >
-                วันที่เริ่มต้น
+                รายละเอียดกิจกรรม
               </label>
-              <div className="relative">
+              <textarea
+                id="description"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={4}
+                className={`w-full px-4 py-2 rounded-md ${
+                  theme === "dark"
+                    ? "bg-gray-700 border-gray-600 text-white"
+                    : "bg-white border-gray-300 text-gray-900"
+                } border ${errors.description ? "border-red-500" : ""}`}
+                placeholder="กรุณากรอกรายละเอียดกิจกรรม"
+              />
+              {errors.description && (
+                <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+              )}
+            </div>
+
+            {/* วันที่เริ่มต้น-วันที่สิ้นสุด */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* วันที่เริ่มต้น */}
+              <div>
+                <label
+                  htmlFor="startDate"
+                  className="block text-sm font-medium mb-2"
+                >
+                  วันที่เริ่มต้น
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="startDate"
+                    name="startDate"
+                    value={formData.startDate}
+                    onChange={handleChange}
+                    onInput={(e) =>
+                      formatDate(e as ChangeEvent<HTMLInputElement>)
+                    }
+                    maxLength={10}
+                    className={`w-full px-4 py-2 rounded-md ${
+                      theme === "dark"
+                        ? "bg-gray-700 border-gray-600 text-white"
+                        : "bg-white border-gray-300 text-gray-900"
+                    } border ${errors.startDate ? "border-red-500" : ""}`}
+                    placeholder="DD/MM/YYYY"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <label htmlFor="startDatePicker" className="cursor-pointer">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </label>
+                    <input
+                      type="date"
+                      id="startDatePicker"
+                      name="startDatePicker"
+                      className="sr-only"
+                      onChange={handleDatePickerChange}
+                    />
+                  </div>
+                </div>
+                {errors.startDate && (
+                  <p className="mt-1 text-sm text-red-500">{errors.startDate}</p>
+                )}
+              </div>
+
+              {/* วันที่สิ้นสุด */}
+              <div>
+                <label
+                  htmlFor="endDate"
+                  className="block text-sm font-medium mb-2"
+                >
+                  วันที่สิ้นสุด
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="endDate"
+                    name="endDate"
+                    value={formData.endDate}
+                    onChange={handleChange}
+                    onInput={(e) =>
+                      formatDate(e as ChangeEvent<HTMLInputElement>)
+                    }
+                    maxLength={10}
+                    className={`w-full px-4 py-2 rounded-md ${
+                      theme === "dark"
+                        ? "bg-gray-700 border-gray-600 text-white"
+                        : "bg-white border-gray-300 text-gray-900"
+                    } border ${errors.endDate ? "border-red-500" : ""}`}
+                    placeholder="DD/MM/YYYY"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <label htmlFor="endDatePicker" className="cursor-pointer">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </label>
+                    <input
+                      type="date"
+                      id="endDatePicker"
+                      name="endDatePicker"
+                      className="sr-only"
+                      onChange={handleDatePickerChange}
+                    />
+                  </div>
+                </div>
+                {errors.endDate && (
+                  <p className="mt-1 text-sm text-red-500">{errors.endDate}</p>
+                )}
+              </div>
+            </div>
+
+            {/* เวลาเริ่มต้น-เวลาสิ้นสุด */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* เวลาเริ่มต้น */}
+              <div>
+                <label
+                  htmlFor="startTime"
+                  className="block text-sm font-medium mb-2"
+                >
+                  เวลาเริ่มต้น
+                </label>
                 <input
-                  type="text"
-                  id="startDate"
-                  name="startDate"
-                  value={formData.startDate}
+                  type="time"
+                  id="startTime"
+                  name="startTime"
+                  value={formData.startTime}
                   onChange={handleChange}
-                  onInput={(e) =>
-                    formatDate(e as ChangeEvent<HTMLInputElement>)
-                  }
-                  maxLength={10}
                   className={`w-full px-4 py-2 rounded-md ${
                     theme === "dark"
                       ? "bg-gray-700 border-gray-600 text-white"
                       : "bg-white border-gray-300 text-gray-900"
-                  } border ${errors.startDate ? "border-red-500" : ""}`}
-                  placeholder="DD/MM/YYYY"
+                  } border`}
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <label htmlFor="startDatePicker" className="cursor-pointer">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </label>
-                  <input
-                    type="date"
-                    id="startDatePicker"
-                    name="startDatePicker"
-                    className="sr-only"
-                    onChange={handleDatePickerChange}
-                  />
-                </div>
               </div>
-              {errors.startDate && (
-                <p className="mt-1 text-sm text-red-500">{errors.startDate}</p>
-              )}
-            </div>
 
-            {/* วันที่สิ้นสุด */}
-            <div>
-              <label
-                htmlFor="endDate"
-                className="block text-sm font-medium mb-2"
-              >
-                วันที่สิ้นสุด
-              </label>
-              <div className="relative">
+              {/* เวลาสิ้นสุด */}
+              <div>
+                <label
+                  htmlFor="endTime"
+                  className="block text-sm font-medium mb-2"
+                >
+                  เวลาสิ้นสุด
+                </label>
                 <input
-                  type="text"
-                  id="endDate"
-                  name="endDate"
-                  value={formData.endDate}
+                  type="time"
+                  id="endTime"
+                  name="endTime"
+                  value={formData.endTime}
                   onChange={handleChange}
-                  onInput={(e) =>
-                    formatDate(e as ChangeEvent<HTMLInputElement>)
-                  }
-                  maxLength={10}
                   className={`w-full px-4 py-2 rounded-md ${
                     theme === "dark"
                       ? "bg-gray-700 border-gray-600 text-white"
                       : "bg-white border-gray-300 text-gray-900"
-                  } border ${errors.endDate ? "border-red-500" : ""}`}
-                  placeholder="DD/MM/YYYY"
+                  } border`}
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <label htmlFor="endDatePicker" className="cursor-pointer">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </label>
-                  <input
-                    type="date"
-                    id="endDatePicker"
-                    name="endDatePicker"
-                    className="sr-only"
-                    onChange={handleDatePickerChange}
-                  />
-                </div>
               </div>
-              {errors.endDate && (
-                <p className="mt-1 text-sm text-red-500">{errors.endDate}</p>
+            </div>
+
+            {/* สถานที่ */}
+            <div className="mb-6">
+              <label
+                htmlFor="location"
+                className="block text-sm font-medium mb-2"
+              >
+                สถานที่
+              </label>
+              <input
+                type="text"
+                id="location"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                className={`w-full px-4 py-2 rounded-md ${
+                  theme === "dark"
+                    ? "bg-gray-700 border-gray-600 text-white"
+                    : "bg-white border-gray-300 text-gray-900"
+                } border ${errors.location ? "border-red-500" : ""}`}
+                placeholder="กรุณากรอกสถานที่จัดกิจกรรม"
+              />
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-500">{errors.location}</p>
               )}
             </div>
-          </div>
 
-          {/* เวลาเริ่มต้น-เวลาสิ้นสุด */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* เวลาเริ่มต้น */}
-            <div>
+            {/* จำนวนรับสมัครสูงสุด */}
+            <div className="mb-6">
               <label
-                htmlFor="startTime"
+                htmlFor="maxParticipants"
                 className="block text-sm font-medium mb-2"
               >
-                เวลาเริ่มต้น
-              </label>
-              <input
-                type="time"
-                id="startTime"
-                name="startTime"
-                value={formData.startTime}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 rounded-md ${
-                  theme === "dark"
-                    ? "bg-gray-700 border-gray-600 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                } border`}
-              />
-            </div>
-
-            {/* เวลาสิ้นสุด */}
-            <div>
-              <label
-                htmlFor="endTime"
-                className="block text-sm font-medium mb-2"
-              >
-                เวลาสิ้นสุด
-              </label>
-              <input
-                type="time"
-                id="endTime"
-                name="endTime"
-                value={formData.endTime}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 rounded-md ${
-                  theme === "dark"
-                    ? "bg-gray-700 border-gray-600 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                } border`}
-              />
-            </div>
-          </div>
-
-          {/* สถานที่ */}
-          <div className="mb-6">
-            <label
-              htmlFor="location"
-              className="block text-sm font-medium mb-2"
-            >
-              สถานที่
-            </label>
-            <input
-              type="text"
-              id="location"
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              className={`w-full px-4 py-2 rounded-md ${
-                theme === "dark"
-                  ? "bg-gray-700 border-gray-600 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              } border ${errors.location ? "border-red-500" : ""}`}
-              placeholder="กรุณากรอกสถานที่จัดกิจกรรม"
-            />
-            {errors.location && (
-              <p className="mt-1 text-sm text-red-500">{errors.location}</p>
-            )}
-          </div>
-
-          {/* จำนวนรับสมัครสูงสุด */}
-          <div className="mb-6">
-            <label
-              htmlFor="maxParticipants"
-              className="block text-sm font-medium mb-2"
-            >
-              จำนวนรับสมัครสูงสุด
-            </label>
-            <input
-              type="number"
-              id="maxParticipants"
-              name="maxParticipants"
-              value={formData.maxParticipants}
-              onChange={handleChange}
-              min="1"
-              className={`w-full px-4 py-2 rounded-md ${
-                theme === "dark"
-                  ? "bg-gray-700 border-gray-600 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              } border ${errors.maxParticipants ? "border-red-500" : ""}`}
-              placeholder="กรุณากรอกจำนวนรับสมัครสูงสุด"
-            />
-            {errors.maxParticipants && (
-              <p className="mt-1 text-sm text-red-500">
-                {errors.maxParticipants}
-              </p>
-            )}
-          </div>
-
-          {/* จำนวนคะแนนและชั่วโมงที่ได้รับ */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* จำนวนคะแนนที่ผู้เข้าร่วมจะได้รับ */}
-            <div>
-              <label htmlFor="score" className="block text-sm font-medium mb-2">
-                จำนวนคะแนนที่ผู้เข้าร่วมจะได้รับ
+                จำนวนรับสมัครสูงสุด
               </label>
               <input
                 type="number"
-                id="score"
-                name="score"
-                value={formData.score}
+                id="maxParticipants"
+                name="maxParticipants"
+                value={formData.maxParticipants}
                 onChange={handleChange}
-                min="0"
+                min="1"
                 className={`w-full px-4 py-2 rounded-md ${
                   theme === "dark"
                     ? "bg-gray-700 border-gray-600 text-white"
                     : "bg-white border-gray-300 text-gray-900"
-                } border ${errors.score ? "border-red-500" : ""}`}
-                placeholder="กรุณากรอกจำนวนคะแนน"
+                } border ${errors.maxParticipants ? "border-red-500" : ""}`}
+                placeholder="กรุณากรอกจำนวนรับสมัครสูงสุด"
               />
-              {errors.score && (
-                <p className="mt-1 text-sm text-red-500">{errors.score}</p>
+              {errors.maxParticipants && (
+                <p className="mt-1 text-sm text-red-500">
+                  {errors.maxParticipants}
+                </p>
               )}
             </div>
 
-            {/* จำนวนชั่วโมงที่ผู้เข้าร่วมจะได้รับ */}
-            <div>
-              <label htmlFor="hours" className="block text-sm font-medium mb-2">
-                จำนวนชั่วโมงที่ผู้เข้าร่วมจะได้รับ
-              </label>
-              <input
-                type="number"
-                id="hours"
-                name="hours"
-                value={formData.hours}
-                onChange={handleChange}
-                min="0.5"
-                step="0.5"
-                className={`w-full px-4 py-2 rounded-md ${
-                  theme === "dark"
-                    ? "bg-gray-700 border-gray-600 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                } border ${errors.hours ? "border-red-500" : ""}`}
-                placeholder="กรุณากรอกจำนวนชั่วโมง"
-              />
-              {errors.hours && (
-                <p className="mt-1 text-sm text-red-500">{errors.hours}</p>
-              )}
-            </div>
-          </div>
+            {/* จำนวนคะแนนและชั่วโมงที่ได้รับ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* จำนวนคะแนนที่ผู้เข้าร่วมจะได้รับ */}
+              <div>
+                <label htmlFor="score" className="block text-sm font-medium mb-2">
+                  จำนวนคะแนนที่ผู้เข้าร่วมจะได้รับ
+                </label>
+                <input
+                  type="number"
+                  id="score"
+                  name="score"
+                  value={formData.score}
+                  onChange={handleChange}
+                  min="0"
+                  className={`w-full px-4 py-2 rounded-md ${
+                    theme === "dark"
+                      ? "bg-gray-700 border-gray-600 text-white"
+                      : "bg-white border-gray-300 text-gray-900"
+                  } border ${errors.score ? "border-red-500" : ""}`}
+                  placeholder="กรุณากรอกจำนวนคะแนน"
+                />
+                {errors.score && (
+                  <p className="mt-1 text-sm text-red-500">{errors.score}</p>
+                )}
+              </div>
 
-          {/* รูปกิจกรรม */}
-          <div className="mb-6">
+              {/* จำนวนชั่วโมงที่ผู้เข้าร่วมจะได้รับ */}
+              <div>
+                <label htmlFor="hours" className="block text-sm font-medium mb-2">
+                  จำนวนชั่วโมงที่ผู้เข้าร่วมจะได้รับ
+                </label>
+                <input
+                  type="number"
+                  id="hours"
+                  name="hours"
+                  value={formData.hours}
+                  onChange={handleChange}
+                  min="0.5"
+                  step="0.5"
+                  className={`w-full px-4 py-2 rounded-md ${
+                    theme === "dark"
+                      ? "bg-gray-700 border-gray-600 text-white"
+                      : "bg-white border-gray-300 text-gray-900"
+                  } border ${errors.hours ? "border-red-500" : ""}`}
+                  placeholder="กรุณากรอกจำนวนชั่วโมง"
+                />
+                {errors.hours && (
+                  <p className="mt-1 text-sm text-red-500">{errors.hours}</p>
+                )}
+              </div>
+            </div>
+
+            {/* รูปกิจกรรม */}
+            <div className="mb-6">
               <label className="block text-sm font-medium mb-2">
                 รูปกิจกรรม
               </label>
@@ -847,48 +847,46 @@ function CreateEventPage() {
               )}
             </div>
 
-          {/* ปุ่มส่งฟอร์ม */}
-          <div className="flex justify-center">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full md:w-auto px-6 py-3 rounded-md font-medium ${
-                isSubmitting
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
-              } text-white transition-colors`}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  กำลังส่ง...
-                </span>
-              ) : (
-                "ขออนุมัติสร้างกิจกรรม"
-              )}
-            </button>
-          </div>
-
-           
+            {/* ปุ่มส่งฟอร์ม */}
+            <div className="flex justify-center">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full md:w-auto px-6 py-3 rounded-md font-medium ${
+                  isSubmitting
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                } text-white transition-colors`}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    กำลังส่ง...
+                  </span>
+                ) : (
+                  "ขออนุมัติสร้างกิจกรรม"
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
