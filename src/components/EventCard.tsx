@@ -1,27 +1,21 @@
 import { useTheme } from '../stores/theme.store';
 import { Link } from 'react-router-dom';
 
-// กำหนดประเภทสำหรับกิจกรรมตามโครงสร้าง API
+// กำหนดประเภทสำหรับกิจกรรม
 export interface EventCardProps {
-  id: number;
+  id: string | number;
   title: string;
   description: string;
-  type: {
-    id: number;
-    name: string;
-  };
-  status: string;
-  startTime: string;
-  endTime: string;
+  eventType: 'อบรม' | 'อาสา' | 'ช่วยงาน';
+  startDate: string;
+  endDate: string;
   maxParticipants: number;
-  currentParticipants: number;
-  createdBy: {
-    id: number;
-    name: string;
-  };
-  createdAt: string;
-  imageUrl: string;
-  location?: string; // อาจจะมีหรือไม่มีก็ได้
+  score: number;
+  hours: number;
+  location: string;
+  organizer: string;
+  image: string;
+  onClick?: () => void;
   compact?: boolean; // สำหรับโหมดแสดงแบบย่อในหน้า Homepage
 }
 
@@ -29,52 +23,34 @@ function EventCard({
   id,
   title,
   description,
-  type,
-  status,
-  startTime,
-  endTime,
+  eventType,
+  startDate,
+  endDate,
   maxParticipants,
-  currentParticipants,
-  createdBy,
-  imageUrl,
-  location = "มหาวิทยาลัย", // ค่าเริ่มต้นกรณีไม่มีข้อมูลจาก API
+  score,
+  hours,
+  location,
+  organizer,
+  image,
+  onClick,
   compact = true, // ค่าเริ่มต้นคือแบบย่อ (ใช้ในหน้า Homepage)
 }: EventCardProps) {
   const { theme } = useTheme();
   
   // กำหนดสีตามประเภทกิจกรรม
-  const typeColorMap: Record<string, string> = {
+  const typeColorMap = {
     'อบรม': 'bg-blue-600 text-white',
     'อาสา': 'bg-green-600 text-white',
     'ช่วยงาน': 'bg-purple-600 text-white',
   };
 
-  const typeColor = typeColorMap[type.name] || 'bg-gray-600 text-white';
+  const typeColor = typeColorMap[eventType];
   
   // ฟังก์ชันตัดข้อความให้สั้นลงถ้าเกินความยาวที่กำหนด
   const truncateText = (text: string, maxLength: number) => {
-    if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
-
-  // ฟังก์ชันแปลงรูปแบบวันที่เวลาให้เป็นรูปแบบไทย
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    // แปลงเป็นรูปแบบวันที่ไทย (วัน/เดือน/ปี)
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
-    
-    return `${day}/${month}/${year}`;
-  };
-
-  // สร้าง URL สำหรับรูปภาพ
-  const fullImageUrl = imageUrl.startsWith('http') 
-    ? imageUrl 
-    : `https://bootcampp.karinwdev.site${imageUrl}`;
 
   return (
     <div 
@@ -87,16 +63,12 @@ function EventCard({
       {/* ส่วนรูปภาพและแท็กประเภทกิจกรรม */}
       <div className="relative h-44">
         <img 
-          src={fullImageUrl || '/api/placeholder/400/320'} 
+          src={image || '/api/placeholder/400/320'} 
           alt={title} 
           className="w-full h-full object-cover"
-          onError={(e) => {
-            // กรณีโหลดรูปไม่สำเร็จ ให้แสดงรูป placeholder แทน
-            (e.target as HTMLImageElement).src = '/api/placeholder/400/320';
-          }}
         />
         <span className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${typeColor}`}>
-          {type.name}
+          {eventType}
         </span>
       </div>
       
@@ -111,7 +83,7 @@ function EventCard({
         <p className={`text-sm mb-3 line-clamp-2 min-h-[40px] ${
           theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
         }`}>
-          {truncateText(description || "ไม่มีคำอธิบาย", 100)}
+          {truncateText(description, 100)}
         </p>
         
         <div className="mt-auto">
@@ -123,7 +95,7 @@ function EventCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            <span className="truncate">{createdBy.name}</span>
+            <span className="truncate">{organizer}</span>
           </div>
           
           {/* วันที่จัดกิจกรรม */}
@@ -134,7 +106,7 @@ function EventCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span className="truncate">{formatDate(startTime)} - {formatDate(endTime)}</span>
+            <span className="truncate">{startDate} - {endDate}</span>
           </div>
           
           {/* สถานที่จัดกิจกรรม */}
@@ -150,17 +122,6 @@ function EventCard({
             <span className="truncate">{location}</span>
           </div>
           
-          {/* จำนวนผู้เข้าร่วม */}
-          <div className={`flex items-center text-sm mb-3 ${
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-          }`}>
-            <svg className="w-4 h-4 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <span className="truncate">{currentParticipants} / {maxParticipants} คน</span>
-          </div>
-          
           {/* ปุ่มดูรายละเอียด */}
           <Link
             to={`/events/detail/${id}`}
@@ -169,6 +130,7 @@ function EventCard({
                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
+            onClick={onClick}
           >
             ดูรายละเอียด
           </Link>

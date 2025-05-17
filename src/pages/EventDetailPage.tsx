@@ -1,147 +1,113 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../stores/theme.store';
+import { CardContainer, CardBody, CardItem } from '../components/ui/3dCard';
 import { useAuth } from '../hooks/UseAuth.hook';
-import LoadingPage from './LoadingPage';
 import api from '../services/api';
 
-interface ActivityDetail {
-  id: number | string;
+// เพิ่มสถานะกิจกรรม
+export type EventStatus = 'รออนุมัติ' | 'อนุมัติ' | 'ไม่อนุมัติ';
+
+// สร้าง interface สำหรับข้อมูลที่ได้จาก API
+interface EventDetailData {
+  id: number;
   title: string;
   description: string;
   type: {
     id: number;
     name: string;
   };
-  location: string;
+  status: string;
   startTime: string;
   endTime: string;
   maxParticipants: number;
   currentParticipants: number;
   createdBy: {
-    id: number | string;
+    id: number;
     name: string;
   };
-  status: string;
+  createdAt: string;
   imageUrl: string;
-  // สามารถเพิ่ม properties อื่นๆ ที่จำเป็นได้
+  location?: string;
+  isRegistered?: boolean;
+  registrationStatus?: string | null;
 }
 
 function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { theme } = useTheme();
-  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const { isAuthenticated, userRole, userId } = useAuth();
   
-  const [activity, setActivity] = useState<ActivityDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [event, setEvent] = useState<EventDetailData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showApprovalConfirmDialog, setShowApprovalConfirmDialog] = useState(false);
+  const [showRejectConfirmDialog, setShowRejectConfirmDialog] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
-  const [registrationMessage, setRegistrationMessage] = useState('');
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
 
-  // ดึงข้อมูลกิจกรรมเมื่อโหลดหน้า
+  // โหลดข้อมูลกิจกรรมจาก API
   useEffect(() => {
-    const fetchActivityDetail = async () => {
-      setIsLoading(true);
+    const fetchEventDetail = async () => {
+      if (!id) return;
+      
+      setLoading(true);
       setError(null);
       
       try {
         // ดึง token จาก localStorage
         const authData = localStorage.getItem('authData');
-        const token = authData ? JSON.parse(authData).token : '';
+        if (!authData) {
+          setError('กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดกิจกรรม');
+          setLoading(false);
+          return;
+        }
         
-        // เรียกใช้ API เพื่อดึงข้อมูลกิจกรรมตาม ID
+        const parsedAuthData = JSON.parse(authData);
+        const token = parsedAuthData.token;
+        
+        if (!token) {
+          setError('ไม่พบข้อมูลการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่');
+          setLoading(false);
+          return;
+        }
+        
+        // เรียก API เพื่อดึงข้อมูลกิจกรรม
         const response = await api.get(`/api/activities/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
         
-        setActivity(response.data);
+        console.log('API Response:', response.data);
         
-        // ตรวจสอบว่าผู้ใช้ลงทะเบียนแล้วหรือไม่ (สมมติให้มี API endpoint สำหรับตรวจสอบ)
-        if (isAuthenticated && token) {
-          try {
-            const registrationResponse = await api.get(`/api/activities/${id}/registration-status`, {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            });
-            
-            setIsRegistered(registrationResponse.data.isRegistered);
-          } catch (err) {
-            console.error('ไม่สามารถตรวจสอบสถานะการลงทะเบียนได้:', err);
-            // ไม่แสดงข้อผิดพลาดนี้แก่ผู้ใช้ เนื่องจากไม่ใช่ข้อผิดพลาดหลัก
-          }
+        // บันทึกข้อมูลกิจกรรม
+        setEvent(response.data);
+        
+        // ตรวจสอบว่าผู้ใช้ลงทะเบียนแล้วหรือยัง
+        if (response.data.isRegistered !== undefined) {
+          setIsRegistered(response.data.isRegistered);
         }
-        
       } catch (err: any) {
-        console.error('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:', err);
-        
-        if (err.response?.status === 404) {
+        console.error('Error fetching event details:', err);
+        if (err.response?.status === 401) {
+          setError('ไม่มีสิทธิ์เข้าถึงข้อมูลกิจกรรม กรุณาเข้าสู่ระบบใหม่');
+        } else if (err.response?.status === 404) {
           setError('ไม่พบกิจกรรมที่ต้องการ');
         } else {
-          setError('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม โปรดลองใหม่อีกครั้ง');
+          setError('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม กรุณาลองใหม่อีกครั้ง');
         }
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
     
-    fetchActivityDetail();
+    fetchEventDetail();
   }, [id, isAuthenticated]);
 
-  // ฟังก์ชันสำหรับการลงทะเบียนเข้าร่วมกิจกรรม
-  const handleRegister = async () => {
-    if (!isAuthenticated) {
-      navigate('/login', { state: { from: `/events/detail/${id}` } });
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      // ดึง token จาก localStorage
-      const authData = localStorage.getItem('authData');
-      const token = authData ? JSON.parse(authData).token : '';
-      
-      if (!token) {
-        setError('กรุณาเข้าสู่ระบบก่อนลงทะเบียนเข้าร่วมกิจกรรม');
-        return;
-      }
-      
-      // เรียกใช้ API สำหรับลงทะเบียนเข้าร่วมกิจกรรม
-      const response = await api.post(`/api/activities/${id}/register`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      setIsRegistered(true);
-      setRegistrationMessage('ลงทะเบียนเข้าร่วมกิจกรรมสำเร็จ!');
-      
-      // อัพเดตจำนวนผู้เข้าร่วม
-      if (activity) {
-        setActivity({
-          ...activity,
-          currentParticipants: activity.currentParticipants + 1
-        });
-      }
-      
-    } catch (err: any) {
-      console.error('เกิดข้อผิดพลาดในการลงทะเบียน:', err);
-      
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError('เกิดข้อผิดพลาดในการลงทะเบียน โปรดลองใหม่อีกครั้ง');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ฟังก์ชันแปลงรูปแบบวันที่และเวลา
+  // ฟังก์ชันสำหรับการแปลงรูปแบบวันที่เวลา
   const formatDateTime = (dateTimeString: string): string => {
     if (!dateTimeString) return '';
     
@@ -158,82 +124,291 @@ function EventDetailPage() {
     
     return `${day}/${month}/${year} ${hours}:${minutes} น.`;
   };
+  
+  // ฟังก์ชันจัดการการสมัครกิจกรรม
+  const handleRegister = () => {
+    if (!isAuthenticated) {
+      // ถ้ายังไม่ได้ล็อกอิน ให้ redirect ไปหน้า login
+      navigate('/login', { state: { from: `/events/detail/${id}` } });
+      return;
+    }
+    
+    setShowConfirmDialog(true);
+  };
 
-  // ฟังก์ชันแปลงรูปแบบสถานะให้แสดงสีที่เหมาะสม
-  const getStatusColor = (status: string) => {
+  // ฟังก์ชันยืนยันการสมัครกิจกรรม
+  const confirmRegistration = async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
+      
+      // ดึง token จาก localStorage
+      const authData = localStorage.getItem('authData');
+      if (!authData) {
+        setError('กรุณาเข้าสู่ระบบเพื่อลงทะเบียนกิจกรรม');
+        return;
+      }
+      
+      const parsedAuthData = JSON.parse(authData);
+      const token = parsedAuthData.token;
+      
+      if (!token) {
+        setError('ไม่พบข้อมูลการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+      
+      // เรียก API สำหรับลงทะเบียนเข้าร่วมกิจกรรม
+      await api.post(`/api/activities/${id}/register`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // อัพเดตสถานะการลงทะเบียน
+      setIsRegistered(true);
+      
+      // อัพเดตจำนวนผู้เข้าร่วมใน state
+      if (event) {
+        setEvent({
+          ...event,
+          currentParticipants: event.currentParticipants + 1,
+          isRegistered: true
+        });
+      }
+      
+      setShowConfirmDialog(false);
+    } catch (err: any) {
+      console.error('Error registering for event:', err);
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ฟังก์ชันยกเลิกการแสดง dialog
+  const cancelRegistration = () => {
+    setShowConfirmDialog(false);
+  };
+
+  // ฟังก์ชันจัดการการอนุมัติกิจกรรม
+  const handleApprove = () => {
+    setApprovalAction('approve');
+    setShowApprovalConfirmDialog(true);
+  };
+
+  // ฟังก์ชันจัดการการปฏิเสธกิจกรรม
+  const handleReject = () => {
+    setApprovalAction('reject');
+    setShowRejectConfirmDialog(true);
+  };
+
+  // ฟังก์ชันยืนยันการอนุมัติหรือปฏิเสธกิจกรรม
+  const confirmApprovalAction = async () => {
+    if (!event || !id) return;
+    
+    try {
+      setLoading(true);
+      
+      // ดึง token จาก localStorage
+      const authData = localStorage.getItem('authData');
+      if (!authData) {
+        setError('กรุณาเข้าสู่ระบบเพื่อดำเนินการ');
+        return;
+      }
+      
+      const parsedAuthData = JSON.parse(authData);
+      const token = parsedAuthData.token;
+      
+      if (!token) {
+        setError('ไม่พบข้อมูลการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+      
+      if (approvalAction === 'approve') {
+        // เรียก API สำหรับอนุมัติกิจกรรม
+        await api.patch(`/api/activities/${id}/approval`, { approvalStatus: 'อนุมัติ' }, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        // อัพเดตสถานะการอนุมัติใน state
+        setEvent({
+          ...event,
+          status: 'อนุมัติ'
+        });
+        
+        setShowApprovalConfirmDialog(false);
+      } else if (approvalAction === 'reject') {
+        // เรียก API สำหรับปฏิเสธกิจกรรม
+        await api.patch(`/api/activities/${id}/approval`, { approvalStatus: 'ไม่อนุมัติ' }, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        // อัพเดตสถานะการอนุมัติใน state
+        setEvent({
+          ...event,
+          status: 'ไม่อนุมัติ'
+        });
+        
+        setShowRejectConfirmDialog(false);
+      }
+    } catch (err: any) {
+      console.error('Error updating approval status:', err);
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('เกิดข้อผิดพลาดในการอัพเดตสถานะการอนุมัติ กรุณาลองใหม่อีกครั้ง');
+      }
+    } finally {
+      setLoading(false);
+      setApprovalAction(null);
+    }
+  };
+
+  // ฟังก์ชันยกเลิก dialog การอนุมัติหรือปฏิเสธ
+  const cancelApprovalAction = () => {
+    if (approvalAction === 'approve') {
+      setShowApprovalConfirmDialog(false);
+    } else if (approvalAction === 'reject') {
+      setShowRejectConfirmDialog(false);
+    }
+    setApprovalAction(null);
+  };
+
+  // ตรวจสอบว่าเป็นผู้สร้างกิจกรรมนี้หรือไม่
+  const isEventCreator = (): boolean => {
+    return (
+      userRole === 'staff' && 
+      event?.createdBy.id.toString() === userId
+    );
+  };
+
+  // ตรวจสอบว่าเป็น admin หรือไม่
+  const isAdmin = (): boolean => {
+    return userRole === 'admin';
+  };
+
+  // ตรวจสอบว่าสามารถแสดงปุ่มสมัครหรือไม่
+  const canShowRegisterButton = (): boolean => {
+    // ถ้าเป็น staff ที่สร้างกิจกรรมนี้ ไม่แสดงปุ่มสมัคร
+    if (isEventCreator()) {
+      return false;
+    }
+    
+    // ถ้ากิจกรรมยังไม่ได้รับการอนุมัติ และผู้ใช้ไม่ใช่ staff หรือ admin ไม่แสดงปุ่มสมัคร
+    if (
+      event?.status !== 'approved' && 
+      userRole !== 'staff' && 
+      userRole !== 'admin'
+    ) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  // ตรวจสอบว่าสามารถแสดงปุ่มอนุมัติ/ปฏิเสธหรือไม่
+  const canShowApprovalButtons = (): boolean => {
+    // แสดงปุ่มอนุมัติ/ปฏิเสธเฉพาะ admin และสถานะของกิจกรรมเป็น "รออนุมัติ"
+    return isAdmin() && event?.status === 'pending';
+  };
+
+  // กำหนดสีตามประเภทกิจกรรม
+  const getEventTypeColor = (typeName: string): string => {
+    switch (typeName) {
+      case 'อบรม':
+        return theme === 'dark' ? 'text-blue-400' : 'text-blue-600';
+      case 'อาสา':
+        return theme === 'dark' ? 'text-green-400' : 'text-green-600';
+      case 'ช่วยงาน':
+        return theme === 'dark' ? 'text-purple-400' : 'text-purple-600';
+      default:
+        return '';
+    }
+  };
+
+  // กำหนดสีตามสถานะกิจกรรม
+  const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'รับสมัคร':
-        return theme === 'dark' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800';
-      case 'กำลังดำเนินการ':
-        return theme === 'dark' ? 'bg-green-700 text-white' : 'bg-green-100 text-green-800';
-      case 'เสร็จสิ้น':
-        return theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800';
-      case 'ยกเลิก':
-        return theme === 'dark' ? 'bg-red-700 text-white' : 'bg-red-100 text-red-800';
+      case 'approved':
+        return theme === 'dark' ? 'text-green-400' : 'text-green-600';
+      case 'pending':
+        return theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600';
+      case 'rejected':
+        return theme === 'dark' ? 'text-red-400' : 'text-red-600';
       default:
-        return theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800';
+        return '';
     }
   };
 
-  // ฟังก์ชันแปลงรูปแบบประเภทให้แสดงสีที่เหมาะสม
-  const getTypeColor = (typeId: number) => {
-    switch (typeId) {
-      case 1: // อบรม
-        return 'bg-blue-600 text-white';
-      case 2: // อาสา
-        return 'bg-green-600 text-white';
-      case 3: // ช่วยงาน
-        return 'bg-purple-600 text-white';
-      default:
-        return 'bg-gray-600 text-white';
-    }
-  };
-
-  // แสดง LoadingPage ระหว่างโหลดข้อมูล
-  if (isLoading) {
-    return <LoadingPage />;
+  // ถ้ากำลังโหลด ให้แสดง loading
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
-  // แสดงข้อความกรณีไม่พบกิจกรรม
+  // ถ้ามีข้อผิดพลาด
   if (error) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
-        <div className={`max-w-md p-8 rounded-lg shadow-lg text-center ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-xl font-bold mb-4">{error}</h2>
-          <button
-            onClick={() => navigate('/events')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            กลับสู่หน้ากิจกรรม
-          </button>
-        </div>
+      <div className={`min-h-screen flex flex-col items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <h1 className="text-2xl font-bold mb-4">{error}</h1>
+        <button
+          onClick={() => navigate('/')}
+          className={`px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+        >
+          กลับไปหน้าหลัก
+        </button>
       </div>
     );
   }
 
-  // แสดงข้อความกรณีไม่มีข้อมูลกิจกรรม
-  if (!activity) {
+  // ถ้าไม่พบกิจกรรม
+  if (!event) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
-        <div className={`max-w-md p-8 rounded-lg shadow-lg text-center ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          <svg className="w-16 h-16 mx-auto mb-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <h2 className="text-xl font-bold mb-4">ไม่พบข้อมูลกิจกรรม</h2>
-          <button
-            onClick={() => navigate('/events')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            กลับสู่หน้ากิจกรรม
-          </button>
-        </div>
+      <div className={`min-h-screen flex flex-col items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <h1 className="text-2xl font-bold mb-4">ไม่พบกิจกรรมที่ต้องการ</h1>
+        <button
+          onClick={() => navigate('/')}
+          className={`px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+        >
+          กลับไปหน้าหลัก
+        </button>
       </div>
     );
   }
 
+  // ถ้าผู้ใช้ทั่วไปพยายามเข้าถึงกิจกรรมที่ยังไม่ได้รับการอนุมัติ
+  if (
+    event.status !== 'approved' && 
+    userRole !== 'staff' && 
+    userRole !== 'admin'
+  ) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <h1 className="text-2xl font-bold mb-4">กิจกรรมนี้ยังไม่เปิดให้เข้าถึง</h1>
+        <p className="mb-4 text-center">กิจกรรมนี้ยังอยู่ในระหว่างการพิจารณาหรือไม่ได้รับการอนุมัติ</p>
+        <button
+          onClick={() => navigate('/')}
+          className={`px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+        >
+          กลับไปหน้าหลัก
+        </button>
+      </div>
+    );
+  }
+
+  // การแสดงผลปกติ
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto py-8 px-4">
@@ -250,156 +425,282 @@ function EventDetailPage() {
           ย้อนกลับ
         </button>
         
-        {/* ข้อความแจ้งเตือนการลงทะเบียน */}
-        {registrationMessage && (
-          <div className="mb-6 p-4 bg-green-100 text-green-800 rounded-md">
-            {registrationMessage}
+        {/* ชื่อกิจกรรม */}
+        <h1 className={`text-3xl font-bold mb-6 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+          {event.title}
+        </h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* คอลัมน์ซ้าย - แสดงการ์ด 3D */}
+          <div>
+            <CardContainer className="py-0">
+              <CardBody className={`relative w-full ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl border border-gray-200 shadow-xl p-6`}>
+                {/* รูปภาพกิจกรรม */}
+                <CardItem translateZ="100" className="w-full">
+                  <img
+                    src={event.imageUrl ? (event.imageUrl.startsWith('http') 
+                      ? event.imageUrl 
+                      : `https://bootcampp.karinwdev.site${event.imageUrl}`) 
+                      : "/api/placeholder/600/400"}
+                    alt={event.title}
+                    className="w-full h-64 object-cover rounded-lg mb-4"
+                    onError={(e) => {
+                      // กรณีโหลดรูปไม่สำเร็จ ให้แสดงรูป placeholder แทน
+                      (e.target as HTMLImageElement).src = '/api/placeholder/600/400';
+                    }}
+                  />
+                </CardItem>
+
+                {/* ข้อมูลผู้จัด */}
+                <CardItem translateZ="50" className="w-full mt-2">
+                  <div className={`flex items-center ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                    <span className="font-medium">ผู้จัด : {event.createdBy.name}</span>
+                  </div>
+                </CardItem>
+
+                {/* สถานะกิจกรรม */}
+                <CardItem translateZ="50" className="w-full mt-4">
+                  <div className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <div className="flex items-center mb-2">
+                      <span className="font-medium mr-2">สถานะ :</span>
+                      <span className={`font-medium ${getStatusColor(event.status)}`}>
+                        {event.status === 'approved' ? 'อนุมัติ' : 
+                         event.status === 'pending' ? 'รออนุมัติ' : 
+                         event.status === 'rejected' ? 'ไม่อนุมัติ' : event.status}
+                      </span>
+                    </div>
+                  </div>
+                </CardItem>
+
+                {/* แสดงข้อมูลการลงทะเบียน */}
+                {isRegistered && (
+                  <CardItem translateZ="50" className="w-full mt-4">
+                    <div className={`p-3 bg-green-100 dark:bg-green-900 rounded-md`}>
+                      <p className={`text-sm text-center ${theme === 'dark' ? 'text-green-300' : 'text-green-700'}`}>
+                        คุณได้ลงทะเบียนเข้าร่วมกิจกรรมนี้แล้ว
+                      </p>
+                    </div>
+                  </CardItem>
+                )}
+
+                {/* แสดงข้อมูลผู้สร้างกิจกรรม */}
+                {isEventCreator() && (
+                  <CardItem translateZ="50" className="w-full mt-4">
+                    <div className={`p-3 bg-blue-100 dark:bg-blue-900 rounded-md`}>
+                      <p className={`text-sm text-center ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>
+                        คุณเป็นผู้สร้างกิจกรรมนี้
+                      </p>
+                    </div>
+                  </CardItem>
+                )}
+              </CardBody>
+            </CardContainer>
           </div>
-        )}
-        
-        {/* แสดงข้อความกรณีเกิดข้อผิดพลาด */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-100 text-red-800 rounded-md">
-            {error}
-          </div>
-        )}
-        
-        <div className={`rounded-lg overflow-hidden shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          {/* รูปภาพกิจกรรม */}
-          <div className="h-64 sm:h-80 md:h-96 relative">
-            <img
-              src={activity.imageUrl?.startsWith('http') 
-                ? activity.imageUrl 
-                : `https://bootcampp.karinwdev.site${activity.imageUrl}`}
-              alt={activity.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/api/placeholder/400/320';
-              }}
-            />
+
+          {/* คอลัมน์ขวา - รายละเอียดกิจกรรม */}
+          <div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl border border-gray-200 shadow-md`}>
+            <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              รายละเอียด
+            </h2>
             
-            {/* แท็กแสดงประเภทและสถานะกิจกรรม */}
-            <div className="absolute top-4 right-4 flex flex-col gap-2">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getTypeColor(activity.type.id)}`}>
-                {activity.type.name}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(activity.status)}`}>
-                {activity.status}
-              </span>
+            <div className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <p>{event.description}</p>
             </div>
-          </div>
-          
-          {/* รายละเอียดกิจกรรม */}
-          <div className="p-6">
-            <h1 className={`text-2xl md:text-3xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
-              {activity.title}
-            </h1>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-              {/* รายละเอียดทั่วไป */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* ประเภท */}
               <div>
-                <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
-                  รายละเอียดกิจกรรม
-                </h2>
-                <p className={`mb-6 whitespace-pre-line ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  {activity.description}
+                <h3 className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  ประเภท
+                </h3>
+                <p className={`font-medium ${getEventTypeColor(event.type.name)}`}>
+                  {event.type.name}
                 </p>
-                
-                {/* ข้อมูลผู้จัดกิจกรรม */}
-                <div className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  <span className="font-medium">ผู้จัด:</span> {activity.createdBy.name}
-                </div>
               </div>
               
-              {/* ข้อมูลวันเวลาและสถานที่ */}
+              {/* ระยะเวลา */}
               <div>
-                <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
-                  ข้อมูลกิจกรรม
-                </h2>
-                
-                <div className={`mb-4 flex items-start ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <div>
-                    <div><span className="font-medium">เริ่ม:</span> {formatDateTime(activity.startTime)}</div>
-                    <div><span className="font-medium">สิ้นสุด:</span> {formatDateTime(activity.endTime)}</div>
-                  </div>
-                </div>
-                
-                <div className={`mb-4 flex items-start ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <div>{activity.location}</div>
-                </div>
-                
-                <div className={`mb-4 flex items-start ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  <svg className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <div>
-                    <span className="font-medium">ผู้เข้าร่วม:</span> {activity.currentParticipants} / {activity.maxParticipants} คน
-                  </div>
-                </div>
+                <h3 className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  ระยะเวลา
+                </h3>
+                <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                  {formatDateTime(event.startTime)} - {formatDateTime(event.endTime)}
+                </p>
+              </div>
+              
+              {/* จำนวนรับสมัคร */}
+              <div>
+                <h3 className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  จำนวนรับสมัคร
+                </h3>
+                <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                  {event.currentParticipants} / {event.maxParticipants} คน
+                </p>
+              </div>
+              
+              {/* สถานที่ */}
+              <div>
+                <h3 className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  สถานที่
+                </h3>
+                <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                  {event.location || "ไม่ระบุ"}
+                </p>
               </div>
             </div>
-            
-            {/* ปุ่มลงทะเบียน */}
-            {activity.status === 'รับสมัคร' && activity.currentParticipants < activity.maxParticipants && !isRegistered ? (
-              <button
-                onClick={handleRegister}
-                disabled={isLoading}
-                className={`w-full md:w-auto px-6 py-3 rounded-md font-medium ${
-                  isLoading
-                    ? 'bg-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                } text-white transition-colors`}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    กำลังดำเนินการ...
-                  </span>
+
+            {/* ปุ่มสมัครกิจกรรม - แสดงเฉพาะเมื่อมีเงื่อนไขที่เหมาะสม */}
+            {canShowRegisterButton() && !isAdmin() && (
+              <div className="mt-4">
+                {isRegistered ? (
+                  <button 
+                    disabled
+                    className="w-full py-2 px-4 bg-gray-500 text-white font-medium rounded-md cursor-not-allowed"
+                  >
+                    สมัครแล้ว
+                  </button>
                 ) : (
-                  'ลงทะเบียนเข้าร่วมกิจกรรม'
+                  <button 
+                    onClick={handleRegister}
+                    className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    สมัครกิจกรรม
+                  </button>
                 )}
-              </button>
-            ) : isRegistered ? (
-              <div className={`p-4 border border-green-300 rounded-md ${theme === 'dark' ? 'bg-green-900 text-green-200' : 'bg-green-50 text-green-800'}`}>
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                  คุณได้ลงทะเบียนเข้าร่วมกิจกรรมนี้แล้ว
-                </span>
               </div>
-            ) : activity.currentParticipants >= activity.maxParticipants ? (
-              <div className={`p-4 border border-yellow-300 rounded-md ${theme === 'dark' ? 'bg-yellow-900 text-yellow-200' : 'bg-yellow-50 text-yellow-800'}`}>
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  กิจกรรมนี้มีผู้เข้าร่วมเต็มจำนวนแล้ว
-                </span>
-              </div>
-            ) : (
-              <div className={`p-4 border border-gray-300 rounded-md ${theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-50 text-gray-700'}`}>
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  ไม่สามารถลงทะเบียนได้ เนื่องจากกิจกรรมไม่ได้อยู่ในช่วงรับสมัคร
-                </span>
+            )}
+            
+            {/* ปุ่มอนุมัติ/ปฏิเสธกิจกรรม - แสดงเฉพาะสำหรับ admin และกิจกรรมที่รออนุมัติ */}
+            {canShowApprovalButtons() && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleReject}
+                  className={`py-2 px-4 font-medium rounded-md ${
+                    theme === 'dark' 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                  }`}
+                >
+                  ปฏิเสธกิจกรรม
+                </button>
+                <button
+                  onClick={handleApprove}
+                  className={`py-2 px-4 font-medium rounded-md ${
+                    theme === 'dark' 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  อนุมัติกิจกรรม
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Confirmation Dialog สำหรับการสมัครกิจกรรม */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div className={`max-w-md w-full p-6 rounded-lg shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              ยืนยันการสมัครกิจกรรม
+            </h2>
+            <p className={`text-center mb-6 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              {event.title}
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={cancelRegistration}
+                className={`flex-1 py-2 px-4 rounded-md border ${
+                  theme === 'dark' 
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmRegistration}
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog สำหรับการอนุมัติกิจกรรม */}
+      {showApprovalConfirmDialog && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div className={`max-w-md w-full p-6 rounded-lg shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              ยืนยันการอนุมัติกิจกรรม
+            </h2>
+            <p className={`text-center mb-6 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              {event.title}
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={cancelApprovalAction}
+                className={`flex-1 py-2 px-4 rounded-md border ${
+                  theme === 'dark' 
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmApprovalAction}
+                className="flex-1 py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog สำหรับการปฏิเสธกิจกรรม */}
+      {showRejectConfirmDialog && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div className={`max-w-md w-full p-6 rounded-lg shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className={`text-xl font-bold mb-4 text-center ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+              ยืนยันการปฏิเสธกิจกรรม
+            </h2>
+            <p className={`text-center mb-6 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              {event.title}
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={cancelApprovalAction}
+                className={`flex-1 py-2 px-4 rounded-md border ${
+                  theme === 'dark' 
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmApprovalAction}
+                className="flex-1 py-2 px-4 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
