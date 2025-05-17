@@ -16,6 +16,28 @@ interface SearchFilterType {
   checked: boolean;
 }
 
+interface Activity {
+  id: number;
+  title: string;
+  description: string;
+  type: {
+    id: number;
+    name: string;
+  };
+  status: string;
+  location: string;
+  startTime: string;
+  endTime: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  createdBy: {
+    id: number;
+    name: string;
+  };
+  createdAt: string;
+  imageUrl: string;
+}
+
 function HomePage() {
   const { theme } = useTheme();
   const { isAuthenticated, userRole } = useAuth();
@@ -59,9 +81,9 @@ function HomePage() {
           activities = filterActiveActivities(activities);
           
           // แยกกิจกรรมตามประเภท
-          const training = activities.filter(activity => activity.type.id === 1);
-          const volunteer = activities.filter(activity => activity.type.id === 2);
-          const helper = activities.filter(activity => activity.type.id === 3);
+          const training = activities.filter((activity: Activity) => activity.type.id === 1);
+const volunteer = activities.filter((activity: Activity) => activity.type.id === 2);
+const helper = activities.filter((activity: Activity) => activity.type.id === 3);
           
           setAllActivities(activities);
           setTrainingActivities(training);

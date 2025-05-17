@@ -14,6 +14,27 @@ interface SearchFilterType {
   checked: boolean;
 }
 
+interface Activity {
+  id: number;
+  title: string;
+  description: string;
+  type: {
+    id: number;
+    name: string;
+  };
+  status: string;
+  location: string;
+  startTime: string;
+  endTime: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  createdBy: {
+    id: number;
+    name: string;
+  };
+  createdAt: string;
+  imageUrl: string;
+}
 
 
 
@@ -89,7 +110,7 @@ function SearchEventPage() {
         
         // กรองตามประเภท (ถ้ามีการเลือกฟิลเตอร์)
         if (filters.some(f => f.checked)) {
-          activities = activities.filter(activity => {
+          activities = activities.filter((activity: Activity) => {
             // เช็คว่าประเภทของกิจกรรมตรงกับฟิลเตอร์ที่เลือกหรือไม่
             if (filters.find(f => f.id === 'training')?.checked && activity.type.id === 1) return true;
             if (filters.find(f => f.id === 'volunteer')?.checked && activity.type.id === 2) return true;

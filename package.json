@@ -12,10 +12,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tabler/icons-react": "^3.33.0",
     "@tailwindcss/vite": "^4.1.4",
     "axios": "^1.9.0",
     "clsx": "^2.1.1",
-    "motion": "^12.11.3",
+    "motion": "^12.12.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.5.2",

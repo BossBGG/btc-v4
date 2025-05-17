@@ -25,7 +25,7 @@ function SearchBar({ className = '', onSearch }: SearchBarProps) {
   
   // ตัวเลือกประเภทสำหรับการค้นหา
   const [searchFilters, setSearchFilters] = useState<SearchFilterType[]>([
-    { id: 'training', label: 'อบรม', checked: true },
+    { id: 'training', label: 'อบรม', checked: false },
     { id: 'volunteer', label: 'อาสา', checked: false },
     { id: 'helper', label: 'ช่วยงาน', checked: false },
   ]);
@@ -89,7 +89,7 @@ function SearchBar({ className = '', onSearch }: SearchBarProps) {
     }
   };
 
-  // ถ้ากำลังโหลดข้อมูล ให้แสดง LoadingPage
+  // แสดง LoadingPage ถ้ากำลังโหลดข้อมูล
   if (isLoading) {
     return <LoadingPage />;
   }
