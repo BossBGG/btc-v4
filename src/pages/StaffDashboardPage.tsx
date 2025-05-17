@@ -14,18 +14,24 @@ import {
   PopularActivitiesCard, 
   TopParticipantsCard 
 } from '../components/DashboardSummaryCards';
+import api from '../services/api';
+import { useAuth } from '../hooks/UseAuth.hook';
 
 // Mock data for dashboard
-interface ActivityData {
-  id: string;
-  title: string;
-  eventType: 'อบรม' | 'อาสา' | 'ช่วยงาน';
-  startDate: string;
-  endDate: string;
-  status: 'รับสมัคร' | 'กำลังดำเนินการ' | 'เสร็จสิ้น';
-  participants: number;
-  maxParticipants: number;
-}
+  // ประเภทข้อมูลสำหรับกิจกรรม
+  interface ActivityItem {
+    id: string | number;
+    title: string;
+    eventType: 'อบรม' | 'อาสา' | 'ช่วยงาน';
+    startDate: string;
+    endDate: string;
+    approvalStatus: 'อนุมัติ' | 'รออนุมัติ' | 'ไม่อนุมัติ';
+    status: 'รับสมัคร' | 'กำลังดำเนินการ' | 'เสร็จสิ้น' | 'ยกเลิก';
+    hours: number;
+    participants: number;
+    maxParticipants: number;
+    createdBy: string;
+  }
 
 interface ApprovalRequest {
   id: string;
@@ -37,59 +43,7 @@ interface ApprovalRequest {
   status: 'รอการอนุมัติ' | 'อนุมัติ' | 'ปฏิเสธ';
 }
 
-// Mock data for activities created by staff
-const mockActivities: ActivityData[] = [
-  {
-    id: '1',
-    title: 'BootCampCPE',
-    eventType: 'อบรม',
-    startDate: '17/05/2568',
-    endDate: '18/05/2568',
-    status: 'รับสมัคร',
-    participants: 15,
-    maxParticipants: 30
-  },
-  {
-    id: '2',
-    title: 'ปลูกป่าชายเลนเพื่อโลกสีเขียว',
-    eventType: 'อาสา',
-    startDate: '22/05/2568',
-    endDate: '22/05/2568',
-    status: 'รับสมัคร',
-    participants: 25,
-    maxParticipants: 50
-  },
-  {
-    id: '3',
-    title: 'งานวิ่งการกุศล Run for Wildlife',
-    eventType: 'ช่วยงาน',
-    startDate: '30/05/2568',
-    endDate: '30/05/2568',
-    status: 'รับสมัคร',
-    participants: 10,
-    maxParticipants: 20
-  },
-  {
-    id: '4',
-    title: 'อบรมปฐมพยาบาลเบื้องต้น',
-    eventType: 'อบรม',
-    startDate: '10/04/2568',
-    endDate: '10/04/2568',
-    status: 'กำลังดำเนินการ',
-    participants: 28,
-    maxParticipants: 40
-  },
-  {
-    id: '5',
-    title: 'ค่ายอาสาพัฒนาโรงเรียน',
-    eventType: 'อาสา',
-    startDate: '01/03/2568',
-    endDate: '03/03/2568',
-    status: 'เสร็จสิ้น',
-    participants: 23,
-    maxParticipants: 25
-  }
-];
+
 
 // Mock data for approval requests
 const mockApprovalRequests: ApprovalRequest[] = [
@@ -156,10 +110,14 @@ const mockTopParticipants = [
 
 function StaffDashboardPage() {
   const { theme } = useTheme();
-  const [activities, setActivities] = useState<ActivityData[]>(mockActivities);
+  const { userId } = useAuth();
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>(mockApprovalRequests);
   const [popularActivities, setPopularActivities] = useState(mockPopularActivities);
   const [topParticipants, setTopParticipants] = useState(mockTopParticipants);
+    // เปลี่ยนจากใช้ข้อมูลจำลองเป็นข้อมูลจาก API
+    const [activities, setActivities] = useState<ActivityItem[]>([]);
+    const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Count activity types for pie chart
   const activityTypeCount = {
@@ -176,6 +134,284 @@ function StaffDashboardPage() {
           ? { ...req, status: isApproved ? 'อนุมัติ' : 'ปฏิเสธ' } 
           : req
       )
+    );
+  };
+
+    // ดึงข้อมูลกิจกรรมจาก API เมื่อ component ถูกโหลด
+    useEffect(() => {
+      fetchActivities();
+    }, [userId]);
+  
+    // ฟังก์ชันดึงข้อมูลกิจกรรมจาก API
+    const fetchActivities = async () => {
+      try {
+        setIsLoadingActivities(true);
+        setErrorMessage(null);
+  
+        // ดึง token จาก localStorage
+        const authData = localStorage.getItem("authData");
+        if (!authData) {
+          setErrorMessage("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+          setIsLoadingActivities(false);
+          return;
+        }
+  
+        // แปลงข้อมูล auth และดึง token
+        const parsedAuthData = JSON.parse(authData);
+        const token = parsedAuthData.token;
+        
+        if (!token) {
+          setErrorMessage("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+          setIsLoadingActivities(false);
+          return;
+        }
+  
+        console.log("กำลังดึงข้อมูลกิจกรรมที่สร้างโดยผู้ใช้สำหรับแดชบอร์ด...");
+        
+        // เรียกใช้ API เพื่อดึงข้อมูลกิจกรรมที่สร้างโดยผู้ใช้
+        const response = await api.get('/api/activities/get-created', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+  
+        console.log("ข้อมูลกิจกรรมที่ได้รับสำหรับแดชบอร์ด:", response.data);
+  
+        if (response.data && response.data.activities) {
+          // แปลงข้อมูลจาก API เป็นรูปแบบที่ต้องการใช้
+          const formattedActivities = response.data.activities.map((activity: any) => {
+            // แปลง startTime และ endTime เป็นรูปแบบ DD/MM/YYYY
+            const startDate = formatDateFromISO(activity.startTime);
+            const endDate = formatDateFromISO(activity.endTime);
+            
+            // แปลงสถานะให้อยู่ในรูปแบบที่เข้าใจง่าย
+            const status = mapStatusToDisplay(activity.status);
+            
+            // แปลงสถานะการอนุมัติ (ตามข้อมูลที่มี)
+            const approvalStatus = activity.approvalStatus || 'รออนุมัติ';
+            
+            return {
+              id: activity.id,
+              title: activity.title,
+              eventType: activity.type?.name || 'อบรม',
+              startDate,
+              endDate,
+              approvalStatus,
+              status,
+              hours: activity.hours || 0,
+              participants: activity.currentParticipants || 0,
+              maxParticipants: activity.maxParticipants,
+              createdBy: userId || ''
+            };
+          });
+  
+          // จัดเรียงเพื่อแสดงกิจกรรมล่าสุดก่อน
+          formattedActivities.sort((a: any, b: any) => {
+            return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          });
+  
+          setActivities(formattedActivities);
+        }
+      } catch (error: any) {
+        console.error("เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรมสำหรับแดชบอร์ด:", error);
+        
+        if (error.response) {
+          if (error.response.status === 401) {
+            setErrorMessage("ไม่มีสิทธิ์ในการดูข้อมูลกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+          } else {
+            setErrorMessage(`เกิดข้อผิดพลาด: ${error.response.data?.message || error.message}`);
+          }
+        } else {
+          setErrorMessage("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+        }
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    };
+  
+    // แปลงวันที่จาก ISO เป็นรูปแบบ DD/MM/YYYY
+    const formatDateFromISO = (isoDate: string): string => {
+      if (!isoDate) return '';
+      
+      const date = new Date(isoDate);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
+      
+      return `${day}/${month}/${year}`;
+    };
+  
+    // แปลงสถานะกิจกรรมให้เป็นภาษาไทย
+    const mapStatusToDisplay = (status: string): 'รับสมัคร' | 'กำลังดำเนินการ' | 'เสร็จสิ้น' | 'ยกเลิก' => {
+      switch (status) {
+        case 'open':
+          return 'รับสมัคร';
+        case 'in_progress':
+          return 'กำลังดำเนินการ';
+        case 'closed':
+          return 'เสร็จสิ้น';
+        case 'cancelled':
+          return 'ยกเลิก';
+        default:
+          return 'รับสมัคร';
+      }
+    };
+
+    // สีประเภทกิจกรรม
+  const eventTypeColor = (type: string) => {
+    switch (type) {
+      case 'อบรม':
+        return theme === 'dark' ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white';
+      case 'อาสา':
+        return theme === 'dark' ? 'bg-green-600 text-white' : 'bg-green-600 text-white';
+      case 'ช่วยงาน':
+        return theme === 'dark' ? 'bg-purple-600 text-white' : 'bg-purple-600 text-white';
+      default:
+        return '';
+    }
+  };
+
+  // สีสถานะการอนุมัติ
+  const approvalStatusColor = (status: string) => {
+    switch (status) {
+      case 'อนุมัติ':
+        return theme === 'dark' ? 'text-green-400' : 'text-green-600';
+      case 'รออนุมัติ':
+        return theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600';
+      case 'ไม่อนุมัติ':
+        return theme === 'dark' ? 'text-red-400' : 'text-red-600';
+      default:
+        return '';
+    }
+  };
+
+  // สีสถานะกิจกรรม
+  const activityStatusColor = (status: string) => {
+    switch (status) {
+      case 'รับสมัคร':
+        return theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600';
+      case 'กำลังดำเนินการ':
+        return theme === 'dark' ? 'text-blue-400' : 'text-blue-600';
+      case 'เสร็จสิ้น':
+        return theme === 'dark' ? 'text-green-400' : 'text-green-600';
+      case 'ยกเลิก':
+        return theme === 'dark' ? 'text-red-400' : 'text-red-600';
+      default:
+        return '';
+    }
+  };
+
+  // แสดงผล Activities Table Card
+  const renderActivitiesTableCard = () => {
+    return (
+      <DashboardCard 
+        title="รายละเอียดกิจกรรมที่เคยสร้าง" 
+        action={{ label: "ดูทั้งหมด", to: "/staff/activities" }}
+      >
+        {isLoadingActivities ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+            <p className="ml-2">กำลังโหลดข้อมูล...</p>
+          </div>
+        ) : errorMessage ? (
+          <div className="py-4 text-center">
+            <p className="text-red-500">{errorMessage}</p>
+            <button 
+              onClick={fetchActivities} 
+              className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="py-4 text-center">
+            <p>คุณยังไม่มีกิจกรรมที่สร้าง</p>
+            <Link 
+              to="/create-event" 
+              className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 inline-block"
+            >
+              สร้างกิจกรรมใหม่
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className={`${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <tr>
+                  <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                  } uppercase tracking-wider`}>
+                    ชื่อกิจกรรม
+                  </th>
+                  <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                  } uppercase tracking-wider`}>
+                    ประเภท
+                  </th>
+                  <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                  } uppercase tracking-wider`}>
+                    สถานะ
+                  </th>
+                  <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                  } uppercase tracking-wider`}>
+                    ผู้เข้าร่วม
+                  </th>
+                  <th scope="col" className={`px-6 py-3 text-center text-xs font-medium ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                  } uppercase tracking-wider`}>
+                    ดูรายละเอียด
+                  </th>
+                </tr>
+              </thead>
+              <tbody className={`${
+                theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'
+              }`}>
+                {activities.slice(0, 5).map((activity) => (
+                  <tr key={activity.id} className={`${
+                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                  }`}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {activity.title}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${eventTypeColor(activity.eventType)}`}>
+                        {activity.eventType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`font-medium ${activityStatusColor(activity.status)}`}>
+                        {activity.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <Link 
+                        to={`/staff/activity-participants/${activity.id}`}
+                        className={`${
+                          theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'
+                        }`}
+                      >
+                        {activity.participants}/{activity.maxParticipants}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      <Link to={`/events/detail/${activity.id}`} className={`inline-flex ${
+                        theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'
+                      }`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DashboardCard>
     );
   };
 
@@ -297,76 +533,7 @@ function StaffDashboardPage() {
         {/* Activities & Approval Tables Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Activities Table Card */}
-          <DashboardCard 
-            title="รายละเอียดกิจกรรมที่เคยสร้าง" 
-            action={{ label: "ดูทั้งหมด", to: "/staff/activities" }}
-          >
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className={`${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <tr>
-                    <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    } uppercase tracking-wider`}>
-                      ชื่อกิจกรรม
-                    </th>
-                    <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    } uppercase tracking-wider`}>
-                      ประเภท
-                    </th>
-                    <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    } uppercase tracking-wider`}>
-                      สถานะ
-                    </th>
-                    <th scope="col" className={`px-6 py-3 text-left text-xs font-medium ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    } uppercase tracking-wider`}>
-                      ผู้เข้าร่วม
-                    </th>
-                    <th scope="col" className={`px-6 py-3 text-center text-xs font-medium ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    } uppercase tracking-wider`}>
-                      ดูรายละเอียด
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className={`${
-                  theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'
-                }`}>
-                  {activities.slice(0, 5).map((activity) => (
-                    <tr key={activity.id} className={`${
-                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-                    }`}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {activity.title}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <TypeBadge type={activity.eventType} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <StatusBadge status={activity.status} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {activity.participants}/{activity.maxParticipants}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                        <Link to={`/events/detail/${activity.id}`} className={`inline-flex ${
-                          theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'
-                        }`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </DashboardCard>
+          {renderActivitiesTableCard()}
 
           {/* Approval Requests Card */}
           <DashboardCard 

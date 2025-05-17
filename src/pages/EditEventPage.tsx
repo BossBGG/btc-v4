@@ -88,93 +88,225 @@ useEffect(() => {
     }
   }
   
-  const fetchEvent = async () => {
-    setIsLoading(true);
-    
-    try {
-      // เรียกใช้ API getEventById จาก eventService
-      const response = await api.get(`/api/activities/${activityId}`);
-      const eventData = response.data;
-      
-      // แปลงข้อมูลจาก API เป็นรูปแบบที่ฟอร์มต้องการ
-      const startDate = formatISOToThai(eventData.startTime);
-      const endDate = formatISOToThai(eventData.endTime);
-      const startTime = extractTimeFromISO(eventData.startTime);
-      const endTime = extractTimeFromISO(eventData.endTime);
-      
-      setFormData({
-        title: eventData.title || '',
-        eventType: mapTypeIdToEventType(eventData.typeId),
-        description: eventData.description || '',
-        startDate,
-        endDate,
-        startTime,
-        endTime,
-        location: eventData.location || '',
-        maxParticipants: eventData.maxParticipants || 0,
-        score: eventData.score || 0,
-        hours: eventData.hours || 0,
-        image: null,
-        previewImage: eventData.imageUrl ? `https://bootcampp.karinwdev.site${eventData.imageUrl}` : null,
-        approvalStatus: eventData.approvalStatus || 'รออนุมัติ'
-      });
-      
+  // ฟังก์ชัน fetchEvent ที่แก้ไขปัญหา token
+const fetchEvent = async () => {
+  setIsLoading(true);
+  
+  try {
+    // ดึง token จาก localStorage ที่ถูกต้อง
+    const authData = localStorage.getItem("authData");
+    if (!authData) {
+      setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
       setIsLoading(false);
-    } catch (error: any) {
-      console.error('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:', error);
-      
-      if (error.response) {
-        if (error.response.status === 404) {
-          setApiError(`ไม่พบกิจกรรมรหัส ${activityId}`);
-        } else {
-          setApiError(error.response.data?.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
-        }
-      } else {
-        setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-      }
-      
-      // สร้างข้อมูลตัวอย่างสำหรับการทดสอบ UI
-      const mockEventData = {
-        title: `กิจกรรม ${activityId}`,
-        eventType: Number(activityId) % 3 === 0 ? 'ช่วยงาน' : Number(activityId) % 2 === 0 ? 'อาสา' : 'อบรม' as EventType,
-        description: `รายละเอียดกิจกรรม ${activityId} ที่กำลังแก้ไข ซึ่งเป็นข้อมูลตัวอย่างสำหรับการทดสอบ`,
-        startDate: '01/06/2568',
-        endDate: '02/06/2568',
-        startTime: '09:00',
-        endTime: '17:00',
-        location: 'อาคาร IT มหาวิทยาลัย',
-        maxParticipants: 30 + Number(activityId),
-        score: 3,
-        hours: 6,
-        previewImage: null,
-        approvalStatus: Number(activityId) % 3 === 0 ? 'ไม่อนุมัติ' : Number(activityId) % 2 === 0 ? 'รออนุมัติ' : 'อนุมัติ' as ApprovalStatus
-      };
-      
-      setFormData({
-        ...formData,
-        ...mockEventData
-      });
-      
-      setIsLoading(false);
+      return;
     }
-  };
+
+    // แปลงข้อมูล auth และดึง token
+    const parsedAuthData = JSON.parse(authData);
+    const token = parsedAuthData.token;
+    
+    if (!token) {
+      setApiError("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+      setIsLoading(false);
+      return;
+    }
+
+    console.log(`กำลังดึงข้อมูลกิจกรรมรหัส ${id} ด้วย token: ${token.substring(0, 15)}...`);
+    
+    // ในโปรเจคจริงควรเรียก API getEventById จาก eventService แต่เราเรียกใช้ api โดยตรง
+    const response = await api.get(`/api/activities/${id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const eventData = response.data;
+    console.log('ข้อมูลที่ได้รับจาก API:', eventData);
+    
+    // แปลงข้อมูลจาก API เป็นรูปแบบที่ฟอร์มต้องการ
+    const startDate = formatISOToThai(eventData.startTime);
+    const endDate = formatISOToThai(eventData.endTime);
+    const startTime = extractTimeFromISO(eventData.startTime);
+    const endTime = extractTimeFromISO(eventData.endTime);
+    
+    setFormData({
+      title: eventData.title || '',
+      eventType: mapTypeIdToEventType(eventData.type?.id?.toString() || "1"),
+      description: eventData.description || '',
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      location: eventData.location || '',
+      maxParticipants: eventData.maxParticipants || 0,
+      score: eventData.score || 0,
+      hours: eventData.hours || 0,
+      image: null,
+      previewImage: eventData.imageUrl ? `https://bootcampp.karinwdev.site${eventData.imageUrl}` : null,
+      approvalStatus: eventData.approvalStatus || 'รออนุมัติ'
+    });
+    
+    setIsLoading(false);
+  } catch (error: any) {
+    console.error('เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:', error);
+    
+    // แสดงรายละเอียดข้อผิดพลาดให้ละเอียดมากขึ้น
+    if (error.response) {
+      console.error('Error status:', error.response.status);
+      console.error('Error data:', error.response.data);
+      
+      if (error.response.status === 401) {
+        setApiError("ไม่มีสิทธิ์ในการดูข้อมูลกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      } else if (error.response.status === 404) {
+        setApiError(`ไม่พบกิจกรรมรหัส ${id}`);
+      } else {
+        setApiError(error.response.data?.message || "เกิดข้อผิดพลาดในการดึงข้อมูล");
+      }
+    } else {
+      setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    }
+    
+    // สร้างข้อมูลตัวอย่างสำหรับการทดสอบ UI เพื่อผู้ใช้ยังสามารถดำเนินการต่อได้
+    const mockEventData = {
+      title: `กิจกรรม ${id}`,
+      eventType: Number(id) % 3 === 0 ? 'ช่วยงาน' : Number(id) % 2 === 0 ? 'อาสา' : 'อบรม' as EventType,
+      description: `รายละเอียดกิจกรรม ${id} ที่กำลังแก้ไข ซึ่งเป็นข้อมูลตัวอย่างสำหรับการทดสอบ`,
+      startDate: '01/06/2568',
+      endDate: '02/06/2568',
+      startTime: '09:00',
+      endTime: '17:00',
+      location: 'อาคาร IT มหาวิทยาลัย',
+      maxParticipants: 30 + Number(id),
+      score: 3,
+      hours: 6,
+      previewImage: null,
+      approvalStatus: Number(id) % 3 === 0 ? 'ไม่อนุมัติ' : Number(id) % 2 === 0 ? 'รออนุมัติ' : 'อนุมัติ' as ApprovalStatus
+    };
+    
+    setFormData({
+      ...formData,
+      ...mockEventData
+    });
+    
+    setIsLoading(false);
+  }
+};
+
+// ฟังก์ชันแปลง typeId เป็น eventType
+const mapTypeIdToEventType = (typeId: string): EventType => {
+  switch (typeId) {
+    case "1":
+      return "อบรม";
+    case "2":
+      return "อาสา";
+    case "3":
+      return "ช่วยงาน";
+    default:
+      return "อบรม";
+  }
+};
+
+// ฟังก์ชันสำหรับส่งข้อมูลที่แก้ไขแล้วกลับไปยัง API
+const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  
+  // ตรวจสอบว่ามี id หรือไม่
+  if (!id) {
+    setApiError("ไม่พบรหัสกิจกรรมที่ต้องการแก้ไข");
+    return;
+  }
+  
+  // ตรวจสอบความถูกต้องของฟอร์ม
+  if (!validateForm()) {
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setApiError(null);
+  
+  try {
+    // ดึง token จาก localStorage
+    const authData = localStorage.getItem("authData");
+    if (!authData) {
+      setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // แปลงข้อมูล auth และดึง token
+    const parsedAuthData = JSON.parse(authData);
+    const token = parsedAuthData.token;
+    
+    if (!token) {
+      setApiError("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
+    const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
+    const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
+
+    // สร้าง payload สำหรับการอัพเดทกิจกรรม
+    const eventPayload = {
+      title: formData.title,
+      description: formData.description,
+      typeId: mapEventTypeToTypeId(formData.eventType),
+      location: formData.location,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      maxParticipants: formData.maxParticipants,
+      imageUrl: "hi.png", // ใช้ค่าเริ่มต้นตามที่เห็นใน Swagger
+    };
+
+    console.log(`กำลังส่งคำขอแก้ไขกิจกรรมรหัส ${id} ไปยัง API`);
+    console.log("ข้อมูลที่ส่ง:", eventPayload);
+    console.log("ใช้ token:", token.substring(0, 15) + "...");
+
+    // ส่งคำขอ PUT ไปยัง API โดยใส่ ID ในพาธ URL
+    const response = await api.put(`/api/activities/${id}`, eventPayload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("การตอบกลับจาก API:", response.data);
+    
+    // แสดงข้อความแจ้งเตือนเมื่อแก้ไขสำเร็จ
+    setSuccessMessage("แก้ไขกิจกรรมสำเร็จ!");
+    
+    // รอ 2 วินาทีแล้วนำทางกลับไปหน้ารายการกิจกรรม
+    setTimeout(() => {
+      navigate('/staff/activities');
+    }, 2000);
+  } catch (error: any) {
+    console.error(`เกิดข้อผิดพลาดในการแก้ไขกิจกรรมรหัส ${id}:`, error);
+
+    if (error.response) {
+      console.error("สถานะ:", error.response.status);
+      console.error("ข้อมูล:", error.response.data);
+
+      // กำหนดข้อความแสดงข้อผิดพลาดตามการตอบกลับ
+      if (error.response.status === 401) {
+        setApiError("ไม่มีสิทธิ์ในการแก้ไขกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      } else if (error.response.status === 404) {
+        setApiError(`ไม่พบกิจกรรมรหัส ${id}`);
+      } else {
+        setApiError(error.response.data?.message || error.response.data?.error || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล");
+      }
+    } else {
+      setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   
   fetchEvent();
 }, [id, navigate]);
   
-  // ฟังก์ชันช่วยแปลง typeId เป็น eventType
-  const mapTypeIdToEventType = (typeId: string): EventType => {
-    switch (typeId) {
-      case "1":
-        return "อบรม";
-      case "2":
-        return "อาสา";
-      case "3":
-        return "ช่วยงาน";
-      default:
-        return "อบรม";
-    }
-  };
+ 
   
   // ฟังก์ชันช่วยแปลงรูปแบบวันที่จาก ISO เป็น DD/MM/YYYY (พ.ศ.)
   const formatISOToThai = (isoDate: string): string => {
@@ -329,101 +461,102 @@ useEffect(() => {
   };
 
   // จัดการการส่งฟอร์ม
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    // ตรวจสอบว่ามี id หรือไม่
-    if (!id) {
-      setApiError("ไม่พบรหัสกิจกรรมที่ต้องการแก้ไข");
-      return;
-    }
-    
-    // ตรวจสอบความถูกต้องของฟอร์ม
-    if (!validateForm()) {
-      return;
-    }
-    
-    setIsSubmitting(true);
-    setApiError(null);
-    
-    try {
-      // ดึง token จาก localStorage
-      const authData = localStorage.getItem("authData");
-      if (!authData) {
-        setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // แปลงข้อมูล auth และดึง token
-      const parsedAuthData = JSON.parse(authData);
-      const token = parsedAuthData.token;
-      
-      if (!token) {
-        setApiError("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
-      const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
-      const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
-
-      // สร้าง payload สำหรับการอัพเดทกิจกรรม
-      const eventPayload = {
-        title: formData.title,
-        description: formData.description,
-        typeId: mapEventTypeToTypeId(formData.eventType),
-        location: formData.location,
-        startTime: startDateTime,
-        endTime: endDateTime,
-        maxParticipants: formData.maxParticipants,
-        imageUrl: "hi.png", // ใช้ค่าเริ่มต้นตามที่เห็นใน Swagger
-      };
-
-      console.log(`กำลังส่งคำขอแก้ไขกิจกรรมรหัส ${id} ไปยัง API`);
-      console.log("ข้อมูลที่ส่ง:", eventPayload);
-      console.log("ใช้ token:", token);
-
-      // ส่งคำขอ PUT ไปยัง API โดยใส่ ID ในพาธ URL
-      const response = await api.put(`/api/activities/${id}`, eventPayload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("การตอบกลับจาก API:", response.data);
-      
-      // แสดงข้อความแจ้งเตือนเมื่อแก้ไขสำเร็จ
-      setSuccessMessage("แก้ไขกิจกรรมสำเร็จ!");
-      
-      // รอ 2 วินาทีแล้วนำทางกลับไปหน้ารายการกิจกรรม
-      setTimeout(() => {
-        navigate('/staff/activities');
-      }, 2000);
-    } catch (error: any) {
-      console.error(`เกิดข้อผิดพลาดในการแก้ไขกิจกรรมรหัส ${id}:`, error);
-
-      if (error.response) {
-        console.error("สถานะ:", error.response.status);
-        console.error("ข้อมูล:", error.response.data);
-
-        // กำหนดข้อความแสดงข้อผิดพลาดตามการตอบกลับ
-        if (error.response.status === 401) {
-          setApiError("ไม่มีสิทธิ์ในการแก้ไขกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
-        } else if (error.response.status === 404) {
-          setApiError(`ไม่พบกิจกรรมรหัส ${id}`);
-        } else {
-          setApiError(error.response.data?.message || error.response.data?.error || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล");
-        }
-      } else {
-        setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-      }
-    } finally {
+  // ฟังก์ชันสำหรับส่งข้อมูลที่แก้ไขแล้วกลับไปยัง API
+const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  
+  // ตรวจสอบว่ามี id หรือไม่
+  if (!id) {
+    setApiError("ไม่พบรหัสกิจกรรมที่ต้องการแก้ไข");
+    return;
+  }
+  
+  // ตรวจสอบความถูกต้องของฟอร์ม
+  if (!validateForm()) {
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setApiError(null);
+  
+  try {
+    // ดึง token จาก localStorage
+    const authData = localStorage.getItem("authData");
+    if (!authData) {
+      setApiError("ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
       setIsSubmitting(false);
+      return;
     }
-  };
+
+    // แปลงข้อมูล auth และดึง token
+    const parsedAuthData = JSON.parse(authData);
+    const token = parsedAuthData.token;
+    
+    if (!token) {
+      setApiError("ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // แปลงวันที่และเวลาให้อยู่ในรูปแบบ RFC 3339
+    const startDateTime = formatDateToRFC3339(formData.startDate, formData.startTime);
+    const endDateTime = formatDateToRFC3339(formData.endDate, formData.endTime);
+
+    // สร้าง payload สำหรับการอัพเดทกิจกรรม
+    const eventPayload = {
+      title: formData.title,
+      description: formData.description,
+      typeId: mapEventTypeToTypeId(formData.eventType),
+      location: formData.location,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      maxParticipants: formData.maxParticipants,
+      imageUrl: "hi.png", // ใช้ค่าเริ่มต้นตามที่เห็นใน Swagger
+    };
+
+    console.log(`กำลังส่งคำขอแก้ไขกิจกรรมรหัส ${id} ไปยัง API`);
+    console.log("ข้อมูลที่ส่ง:", eventPayload);
+    console.log("ใช้ token:", token.substring(0, 15) + "...");
+
+    // ส่งคำขอ PUT ไปยัง API โดยใส่ ID ในพาธ URL
+    const response = await api.put(`/api/activities/${id}`, eventPayload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("การตอบกลับจาก API:", response.data);
+    
+    // แสดงข้อความแจ้งเตือนเมื่อแก้ไขสำเร็จ
+    setSuccessMessage("แก้ไขกิจกรรมสำเร็จ!");
+    
+    // รอ 2 วินาทีแล้วนำทางกลับไปหน้ารายการกิจกรรม
+    setTimeout(() => {
+      navigate('/staff/activities');
+    }, 2000);
+  } catch (error: any) {
+    console.error(`เกิดข้อผิดพลาดในการแก้ไขกิจกรรมรหัส ${id}:`, error);
+
+    if (error.response) {
+      console.error("สถานะ:", error.response.status);
+      console.error("ข้อมูล:", error.response.data);
+
+      // กำหนดข้อความแสดงข้อผิดพลาดตามการตอบกลับ
+      if (error.response.status === 401) {
+        setApiError("ไม่มีสิทธิ์ในการแก้ไขกิจกรรม หรือ token หมดอายุ กรุณาเข้าสู่ระบบใหม่");
+      } else if (error.response.status === 404) {
+        setApiError(`ไม่พบกิจกรรมรหัส ${id}`);
+      } else {
+        setApiError(error.response.data?.message || error.response.data?.error || "เกิดข้อผิดพลาดในการอัพเดทข้อมูล");
+      }
+    } else {
+      setApiError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   
   // ฟังก์ชันสำหรับการจัดรูปแบบวันที่ (DD/MM/YYYY)
   const formatDate = (e: ChangeEvent<HTMLInputElement>) => {
