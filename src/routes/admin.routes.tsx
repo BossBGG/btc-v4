@@ -3,7 +3,7 @@ import React from 'react';
 import RoleBasedRoute from '../core/guards/RoleBasedRoute';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
 import EventApprovalRequestsPage from '../pages/EventApprovalRequestsPage';
-import UserPermissionsPage from '../pages/UsePermissionsPage';
+import UserPermissionsPage from '../pages/UserPermissionsPage';
 import UserSuspensionPage from '../pages/UserSuspensionPage';
 
 // Placeholder components สำหรับหน้าที่ยังไม่ได้สร้าง

@@ -1,8 +1,8 @@
-// src/pages/UsePermissionsPage.tsx
+// src/pages/UserPermissionsPage.tsx
 import { useState, useEffect } from 'react';
 import { useTheme } from '../stores/theme.store';
+import { useAuth } from '../hooks/UseAuth.hook';
 import api from '../services/api';
-import useUserPermissions from '../hooks/useUserPermissions.hook';
 
 // ประเภทข้อมูลสำหรับผู้ใช้
 interface UserItem {
@@ -20,7 +20,7 @@ type SortOrder = 'asc' | 'desc';
 
 function UserPermissionsPage() {
   const { theme } = useTheme();
-  const { appointAsStaff, revokeStaffPermission, loading: permissionLoading, error: permissionError } = useUserPermissions();
+  const auth = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,81 +31,80 @@ function UserPermissionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStaff, setFilterStaff] = useState<string>('');
 
-  // ฟังก์ชันดึงข้อมูลผู้ใช้ทั้งหมด
-  const fetchUsers = async () => {
+  // ดึง accessToken จาก localStorage
+  const getAccessToken = () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      // เรียกใช้ API เพื่อดึงข้อมูลผู้ใช้
-      const response = await api.get('/admin/users');
-      
-      // แปลงข้อมูลจาก API ให้อยู่ในรูปแบบที่ต้องการใช้
-      const formattedUsers: UserItem[] = response.data.map((user: any) => ({
-        id: user.id || '',
-        name: `${user.firstName || ''} ${user.lastName || ''}`,
-        studentId: user.studentId || '',
-        faculty: user.faculty || '',
-        email: user.email || '',
-        isStaff: user.role === 'staff'
-      }));
-      
-      setUsers(formattedUsers);
-    } catch (err: any) {
-      console.error('Error fetching users:', err);
-      
-      // ถ้าไม่สามารถดึงข้อมูลจาก API ได้ ให้ใช้ข้อมูลตัวอย่าง
-      setError('ไม่สามารถดึงข้อมูลผู้ใช้ได้ กำลังแสดงข้อมูลตัวอย่าง');
-      
-      // ใช้ข้อมูลตัวอย่าง
-      const sampleUsers: UserItem[] = [
-        {
-          id: '1',
-          name: 'นายสมชาย ใจดี',
-          studentId: '65015001',
-          faculty: 'คณะวิทยาศาสตร์',
-          email: '65015001@up.ac.th',
-          isStaff: false,
-        },
-        {
-          id: '2',
-          name: 'นางสาวสมหญิง รักเรียน',
-          studentId: '65015002',
-          faculty: 'คณะวิศวกรรมศาสตร์',
-          email: '65015002@up.ac.th',
-          isStaff: true,
-        },
-        {
-          id: '3',
-          name: 'นายวิชัย เก่งกาจ',
-          studentId: '65015003',
-          faculty: 'คณะวิทยาศาสตร์',
-          email: '65015003@up.ac.th',
-          isStaff: false,
-        },
-        {
-          id: '4',
-          name: 'นางสาวแก้วตา สว่างศรี',
-          studentId: '65015004',
-          faculty: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
-          email: '65015004@up.ac.th',
-          isStaff: true,
-        },
-        {
-          id: '5',
-          name: 'นายภูมิ ปัญญาดี',
-          studentId: '65015005',
-          faculty: 'คณะวิศวกรรมศาสตร์',
-          email: '65015005@up.ac.th',
-          isStaff: false,
-        }
-      ];
-      
-      setUsers(sampleUsers);
-    } finally {
-      setLoading(false);
+      const authData = localStorage.getItem('authData');
+      if (authData) {
+        const parsedAuthData = JSON.parse(authData);
+        console.log('accessToken:', parsedAuthData.token);
+        return parsedAuthData.token;
+        
+      }
+      return null;
+    } catch (error) {
+      console.error('Error retrieving token:', error);
+      return null;
     }
+
   };
+
+  // แก้ไขฟังก์ชัน fetchUsers ในส่วนของการแปลงข้อมูล
+const fetchUsers = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    // เพิ่ม accessToken ในส่วนหัวของการร้องขอ
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+      setError('ไม่พบ accessToken กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+      setLoading(false);
+      return;
+    }
+
+    // เรียกใช้ API ดึงข้อมูลผู้ใช้พร้อมกับ accessToken
+    const response = await api.get('/api/admin/users', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    // ตรวจสอบโครงสร้างข้อมูลที่ได้รับ
+    console.log('API Response Data:', response.data);
+    
+    // ดึง array ของผู้ใช้จากโครงสร้างข้อมูลที่ถูกต้อง
+    const usersArray = response.data.users || [];
+    
+    if (!Array.isArray(usersArray)) {
+      console.error('Invalid users data format:', usersArray);
+      setError('รูปแบบข้อมูลที่ได้รับจาก API ไม่ถูกต้อง');
+      setLoading(false);
+      return;
+    }
+    
+    // แปลงข้อมูลจาก API ให้ตรงกับรูปแบบที่เราต้องการใช้
+    const formattedUsers: UserItem[] = usersArray.map((user: any) => ({
+      id: user._id || user.id || '',
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'ไม่ระบุชื่อ',
+      studentId: user.studentId || '',
+      faculty: user.faculty || '',
+      email: user.email || '',
+      isStaff: user.role === 'staff'
+    }));
+    
+    setUsers(formattedUsers);
+    setLoading(false);
+  } catch (err: any) {
+    console.error('Error fetching users:', err);
+    if (err.response) {
+      console.error('Error response data:', err.response.data);
+      console.error('Error response status:', err.response.status);
+    }
+    setError(err.response?.data?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้');
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchUsers();
@@ -124,54 +123,86 @@ function UserPermissionsPage() {
   };
 
   // ฟังก์ชันจัดการการแต่งตั้ง staff
-  const handleAppoint = async (id: string) => {
-    const confirmed = window.confirm('คุณต้องการแต่งตั้งผู้ใช้นี้เป็นเจ้าหน้าที่ใช่หรือไม่?');
-    if (confirmed) {
-      try {
-        setLoading(true);
-        // เรียกใช้ฟังก์ชันแต่งตั้ง staff จาก hook
-        const result = await appointAsStaff(id);
-        
-        if (result) {
-          // ถ้าสำเร็จ อัพเดทสถานะใน state
-          setUsers(users.map(user => 
-            user.id === id ? { ...user, isStaff: true } : user
-          ));
-          alert('แต่งตั้งเจ้าหน้าที่สำเร็จ');
-        }
-      } catch (err) {
-        console.error('Error appointing staff:', err);
-        alert('เกิดข้อผิดพลาดในการแต่งตั้งเจ้าหน้าที่');
-      } finally {
+const handleAppoint = async (id: string) => {
+  const confirmed = window.confirm('คุณต้องการแต่งตั้งผู้ใช้นี้เป็นเจ้าหน้าที่ใช่หรือไม่?');
+  if (confirmed) {
+    try {
+      setLoading(true);
+      
+      // เพิ่ม accessToken ในส่วนหัวของการร้องขอ
+      const accessToken = getAccessToken();
+      if (!accessToken) {
+        setError('ไม่พบ accessToken กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
         setLoading(false);
+        return;
       }
-    }
-  };
 
-  // ฟังก์ชันจัดการการยกเลิก staff
-  const handleRevoke = async (id: string) => {
-    const confirmed = window.confirm('คุณต้องการยกเลิกตำแหน่งเจ้าหน้าที่ของผู้ใช้นี้ใช่หรือไม่?');
-    if (confirmed) {
-      try {
-        setLoading(true);
-        // เรียกใช้ฟังก์ชันยกเลิกสิทธิ์ staff จาก hook
-        const result = await revokeStaffPermission(id);
-        
-        if (result) {
-          // ถ้าสำเร็จ อัพเดทสถานะใน state
-          setUsers(users.map(user => 
-            user.id === id ? { ...user, isStaff: false } : user
-          ));
-          alert('ยกเลิกตำแหน่งเจ้าหน้าที่สำเร็จ');
+      // ส่งคำขอเปลี่ยนสิทธิ์พร้อมกับ accessToken
+      // แก้ไข URL endpoint ให้ถูกต้อง
+      await api.put(`/api/admin/users/${id}/role`, { role: 'staff' }, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
         }
-      } catch (err) {
-        console.error('Error revoking staff permission:', err);
-        alert('เกิดข้อผิดพลาดในการยกเลิกตำแหน่งเจ้าหน้าที่');
-      } finally {
-        setLoading(false);
+      });
+      
+      // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
+      setUsers(users.map(user => 
+        user.id === id ? { ...user, isStaff: true } : user
+      ));
+      
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Error appointing staff:', err);
+      if (err.response) {
+        console.error('Error response data:', err.response.data);
+        console.error('Error response status:', err.response.status);
       }
+      alert(err.response?.data?.message || 'เกิดข้อผิดพลาดในการแต่งตั้งเจ้าหน้าที่');
+      setLoading(false);
     }
-  };
+  }
+};
+
+// ฟังก์ชันจัดการการยกเลิก staff
+const handleRevoke = async (id: string) => {
+  const confirmed = window.confirm('คุณต้องการยกเลิกตำแหน่งเจ้าหน้าที่ของผู้ใช้นี้ใช่หรือไม่?');
+  if (confirmed) {
+    try {
+      setLoading(true);
+      
+      // เพิ่ม accessToken ในส่วนหัวของการร้องขอ
+      const accessToken = getAccessToken();
+      if (!accessToken) {
+        setError('ไม่พบ accessToken กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+        setLoading(false);
+        return;
+      }
+
+      // ส่งคำขอเปลี่ยนสิทธิ์พร้อมกับ accessToken
+      // แก้ไข URL endpoint ให้ถูกต้อง
+      await api.put(`/api/admin/users/${id}/role`, { role: 'student' }, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
+      setUsers(users.map(user => 
+        user.id === id ? { ...user, isStaff: false } : user
+      ));
+      
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Error revoking staff permission:', err);
+      if (err.response) {
+        console.error('Error response data:', err.response.data);
+        console.error('Error response status:', err.response.status);
+      }
+      alert(err.response?.data?.message || 'เกิดข้อผิดพลาดในการยกเลิกสิทธิ์เจ้าหน้าที่');
+      setLoading(false);
+    }
+  }
+};
 
   // กรองและเรียงข้อมูล
   const filteredAndSortedUsers = users
@@ -215,12 +246,35 @@ function UserPermissionsPage() {
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
 
   // แสดงหน้าจอโหลด
-  if (loading || permissionLoading) {
+  if (loading) {
     return (
       <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-          <p>กำลังดำเนินการ...</p>
+          <p>กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // แสดงข้อผิดพลาด
+  if (error) {
+    return (
+      <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <div className="text-center">
+          <div className="text-red-500 mb-2">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-xl font-semibold mb-2">เกิดข้อผิดพลาด</p>
+          <p>{error}</p>
+          <button 
+            onClick={() => fetchUsers()} 
+            className={`mt-4 px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+          >
+            ลองใหม่อีกครั้ง
+          </button>
         </div>
       </div>
     );
@@ -230,21 +284,6 @@ function UserPermissionsPage() {
     <div className={`min-h-screen p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto">
         <h1 className="text-2xl font-bold mb-6">จัดการสิทธิ์ผู้ใช้</h1>
-        
-        {/* แสดงข้อผิดพลาด (ถ้ามี) */}
-        {(error || permissionError) && (
-          <div className={`p-4 mb-6 rounded-lg ${theme === 'dark' ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-800'}`}>
-            <p>{error || permissionError}</p>
-            <button 
-              onClick={fetchUsers} 
-              className={`mt-2 px-3 py-1 rounded-md ${
-                theme === 'dark' ? 'bg-red-700 hover:bg-red-600' : 'bg-red-200 hover:bg-red-300'
-              }`}
-            >
-              ลองใหม่อีกครั้ง
-            </button>
-          </div>
-        )}
         
         {/* ส่วนค้นหาและตัวกรอง */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
@@ -441,7 +480,7 @@ function UserPermissionsPage() {
                     colSpan={6}
                     className="px-6 py-4 text-center text-sm font-medium"
                   >
-                    ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา
+                    {searchTerm || filterStaff ? 'ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา' : 'ไม่พบข้อมูลผู้ใช้'}
                   </td>
                 </tr>
               )}
@@ -465,7 +504,6 @@ function UserPermissionsPage() {
                     ? 'bg-gray-700 text-white hover:bg-gray-600'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                 }`}
-                aria-label="Previous page"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -497,8 +535,6 @@ function UserPermissionsPage() {
                           ? 'bg-gray-700 text-white hover:bg-gray-600'
                           : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                     }`}
-                    aria-label={`Page ${pageNumber}`}
-                    aria-current={currentPage === pageNumber ? "page" : undefined}
                   >
                     {pageNumber}
                   </button>
@@ -517,7 +553,6 @@ function UserPermissionsPage() {
                     ? 'bg-gray-700 text-white hover:bg-gray-600'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                 }`}
-                aria-label="Next page"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
