@@ -26,7 +26,7 @@ export interface RegisterResult {
 export const register = async (payload: RegisterPayload): Promise<RegisterResult> => {
   try {
     // Call the real API endpoint for registration
-    const result = await api.post('/auth/register', payload);
+    const result = await api.post('/api/auth/register', payload);
     
     // Return the API response data
     return result.data;
