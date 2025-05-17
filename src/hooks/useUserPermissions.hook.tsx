@@ -14,6 +14,7 @@ export const useUserPermissions = () => {
       const result = await updateUserRole(userId, 'staff');
       return result;
     } catch (err: any) {
+      console.error('Error appointing staff:', err);
       setError(
         err.response?.data?.message || 
         'เกิดข้อผิดพลาดในการแต่งตั้งเป็นเจ้าหน้าที่ โปรดลองอีกครั้ง'
@@ -32,6 +33,7 @@ export const useUserPermissions = () => {
       const result = await updateUserRole(userId, 'student');
       return result;
     } catch (err: any) {
+      console.error('Error revoking staff permission:', err);
       setError(
         err.response?.data?.message || 
         'เกิดข้อผิดพลาดในการยกเลิกสิทธิ์เจ้าหน้าที่ โปรดลองอีกครั้ง'

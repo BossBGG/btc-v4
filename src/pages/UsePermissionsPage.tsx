@@ -1,9 +1,8 @@
-// src/pages/UserPermissionsPage.tsx
+// src/pages/UsePermissionsPage.tsx
 import { useState, useEffect } from 'react';
 import { useTheme } from '../stores/theme.store';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
 import api from '../services/api';
+import useUserPermissions from '../hooks/useUserPermissions.hook';
 
 // ประเภทข้อมูลสำหรับผู้ใช้
 interface UserItem {
@@ -21,9 +20,10 @@ type SortOrder = 'asc' | 'desc';
 
 function UserPermissionsPage() {
   const { theme } = useTheme();
+  const { appointAsStaff, revokeStaffPermission, loading: permissionLoading, error: permissionError } = useUserPermissions();
   const [users, setUsers] = useState<UserItem[]>([]);
-  const [loading, setLoading] = useState(true); // เพิ่ม state สำหรับแสดงสถานะโหลด
-  const [error, setError] = useState<string | null>(null); // เพิ่ม state สำหรับแสดงข้อผิดพลาด
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [sortField, setSortField] = useState<SortField>('name');
@@ -31,17 +31,18 @@ function UserPermissionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStaff, setFilterStaff] = useState<string>('');
 
-  // ฟังก์ชันดึงข้อมูลผู้ใช้จาก API
+  // ฟังก์ชันดึงข้อมูลผู้ใช้ทั้งหมด
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
-      // เรียกใช้ API ดึงข้อมูลผู้ใช้
+      
+      // เรียกใช้ API เพื่อดึงข้อมูลผู้ใช้
       const response = await api.get('/admin/users');
       
-      // แปลงข้อมูลจาก API ให้ตรงกับรูปแบบที่เราต้องการใช้
+      // แปลงข้อมูลจาก API ให้อยู่ในรูปแบบที่ต้องการใช้
       const formattedUsers: UserItem[] = response.data.map((user: any) => ({
-        id: user._id || user.id,
+        id: user.id || '',
         name: `${user.firstName || ''} ${user.lastName || ''}`,
         studentId: user.studentId || '',
         faculty: user.faculty || '',
@@ -50,10 +51,58 @@ function UserPermissionsPage() {
       }));
       
       setUsers(formattedUsers);
-      setLoading(false);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้');
+      
+      // ถ้าไม่สามารถดึงข้อมูลจาก API ได้ ให้ใช้ข้อมูลตัวอย่าง
+      setError('ไม่สามารถดึงข้อมูลผู้ใช้ได้ กำลังแสดงข้อมูลตัวอย่าง');
+      
+      // ใช้ข้อมูลตัวอย่าง
+      const sampleUsers: UserItem[] = [
+        {
+          id: '1',
+          name: 'นายสมชาย ใจดี',
+          studentId: '65015001',
+          faculty: 'คณะวิทยาศาสตร์',
+          email: '65015001@up.ac.th',
+          isStaff: false,
+        },
+        {
+          id: '2',
+          name: 'นางสาวสมหญิง รักเรียน',
+          studentId: '65015002',
+          faculty: 'คณะวิศวกรรมศาสตร์',
+          email: '65015002@up.ac.th',
+          isStaff: true,
+        },
+        {
+          id: '3',
+          name: 'นายวิชัย เก่งกาจ',
+          studentId: '65015003',
+          faculty: 'คณะวิทยาศาสตร์',
+          email: '65015003@up.ac.th',
+          isStaff: false,
+        },
+        {
+          id: '4',
+          name: 'นางสาวแก้วตา สว่างศรี',
+          studentId: '65015004',
+          faculty: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
+          email: '65015004@up.ac.th',
+          isStaff: true,
+        },
+        {
+          id: '5',
+          name: 'นายภูมิ ปัญญาดี',
+          studentId: '65015005',
+          faculty: 'คณะวิศวกรรมศาสตร์',
+          email: '65015005@up.ac.th',
+          isStaff: false,
+        }
+      ];
+      
+      setUsers(sampleUsers);
+    } finally {
       setLoading(false);
     }
   };
@@ -80,17 +129,20 @@ function UserPermissionsPage() {
     if (confirmed) {
       try {
         setLoading(true);
-        await api.put(`/admin/users/${id}/role`, { role: 'staff' });
+        // เรียกใช้ฟังก์ชันแต่งตั้ง staff จาก hook
+        const result = await appointAsStaff(id);
         
-        // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
-        setUsers(users.map(user => 
-          user.id === id ? { ...user, isStaff: true } : user
-        ));
-        
-        setLoading(false);
+        if (result) {
+          // ถ้าสำเร็จ อัพเดทสถานะใน state
+          setUsers(users.map(user => 
+            user.id === id ? { ...user, isStaff: true } : user
+          ));
+          alert('แต่งตั้งเจ้าหน้าที่สำเร็จ');
+        }
       } catch (err) {
         console.error('Error appointing staff:', err);
         alert('เกิดข้อผิดพลาดในการแต่งตั้งเจ้าหน้าที่');
+      } finally {
         setLoading(false);
       }
     }
@@ -102,17 +154,20 @@ function UserPermissionsPage() {
     if (confirmed) {
       try {
         setLoading(true);
-        await api.put(`/admin/users/${id}/role`, { role: 'student' });
+        // เรียกใช้ฟังก์ชันยกเลิกสิทธิ์ staff จาก hook
+        const result = await revokeStaffPermission(id);
         
-        // อัพเดตข้อมูลในหน้าจอหลังจากเปลี่ยนสิทธิ์สำเร็จ
-        setUsers(users.map(user => 
-          user.id === id ? { ...user, isStaff: false } : user
-        ));
-        
-        setLoading(false);
+        if (result) {
+          // ถ้าสำเร็จ อัพเดทสถานะใน state
+          setUsers(users.map(user => 
+            user.id === id ? { ...user, isStaff: false } : user
+          ));
+          alert('ยกเลิกตำแหน่งเจ้าหน้าที่สำเร็จ');
+        }
       } catch (err) {
         console.error('Error revoking staff permission:', err);
-        alert('เกิดข้อผิดพลาดในการยกเลิกสิทธิ์เจ้าหน้าที่');
+        alert('เกิดข้อผิดพลาดในการยกเลิกตำแหน่งเจ้าหน้าที่');
+      } finally {
         setLoading(false);
       }
     }
@@ -160,45 +215,36 @@ function UserPermissionsPage() {
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
 
   // แสดงหน้าจอโหลด
-  if (loading) {
+  if (loading || permissionLoading) {
     return (
       <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-          <p>กำลังโหลดข้อมูล...</p>
+          <p>กำลังดำเนินการ...</p>
         </div>
       </div>
     );
   }
 
-  // แสดงข้อผิดพลาด
-  if (error) {
-    return (
-      <div className={`min-h-screen p-6 flex items-center justify-center ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
-        <div className="text-center">
-          <div className="text-red-500 mb-2">
-            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <p className="text-xl font-semibold mb-2">เกิดข้อผิดพลาด</p>
-          <p>{error}</p>
-          <button 
-            onClick={() => fetchUsers()} 
-            className={`mt-4 px-4 py-2 rounded-md ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-          >
-            ลองใหม่อีกครั้ง
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // โค้ดแสดงผลที่เหลือคงเดิม...
   return (
     <div className={`min-h-screen p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto">
         <h1 className="text-2xl font-bold mb-6">จัดการสิทธิ์ผู้ใช้</h1>
+        
+        {/* แสดงข้อผิดพลาด (ถ้ามี) */}
+        {(error || permissionError) && (
+          <div className={`p-4 mb-6 rounded-lg ${theme === 'dark' ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-800'}`}>
+            <p>{error || permissionError}</p>
+            <button 
+              onClick={fetchUsers} 
+              className={`mt-2 px-3 py-1 rounded-md ${
+                theme === 'dark' ? 'bg-red-700 hover:bg-red-600' : 'bg-red-200 hover:bg-red-300'
+              }`}
+            >
+              ลองใหม่อีกครั้ง
+            </button>
+          </div>
+        )}
         
         {/* ส่วนค้นหาและตัวกรอง */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
@@ -395,7 +441,7 @@ function UserPermissionsPage() {
                     colSpan={6}
                     className="px-6 py-4 text-center text-sm font-medium"
                   >
-                    {searchTerm || filterStaff ? 'ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา' : 'ไม่พบข้อมูลผู้ใช้'}
+                    ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขการค้นหา
                   </td>
                 </tr>
               )}
@@ -403,7 +449,7 @@ function UserPermissionsPage() {
           </table>
         </div>
         
-        {/* Pagination - คงเดิม */}
+        {/* Pagination */}
         {filteredAndSortedUsers.length > 0 && (
           <div className="flex justify-center mt-6">
             <nav className="flex items-center space-x-2">
@@ -419,6 +465,7 @@ function UserPermissionsPage() {
                     ? 'bg-gray-700 text-white hover:bg-gray-600'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                 }`}
+                aria-label="Previous page"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -450,6 +497,8 @@ function UserPermissionsPage() {
                           ? 'bg-gray-700 text-white hover:bg-gray-600'
                           : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                     }`}
+                    aria-label={`Page ${pageNumber}`}
+                    aria-current={currentPage === pageNumber ? "page" : undefined}
                   >
                     {pageNumber}
                   </button>
@@ -468,6 +517,7 @@ function UserPermissionsPage() {
                     ? 'bg-gray-700 text-white hover:bg-gray-600'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                 }`}
+                aria-label="Next page"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
