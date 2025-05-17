@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../stores/theme.store';
+import { useAuth } from '../hooks/UseAuth.hook';
 import EventCard from '../components/EventCard';
 import SearchBar from '../components/SearchBar';
-import { searchEvents, filterEventsByPermission, mockEventsWithApproval } from '../data/mockEventsWithApproval';
-import { useAuth } from '../hooks/UseAuth.hook';
+import { searchActivities, filterApprovedActivities, filterActiveActivities } from '../services/activityService';
+import LoadingPage from './LoadingPage';
 
 // ประเภทสำหรับฟิลเตอร์การค้นหา
 interface SearchFilterType {
@@ -17,7 +18,7 @@ function SearchEventPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { userRole, userId } = useAuth();
+  const { userRole, isAuthenticated } = useAuth();
   
   // ดึงค่า query parameters จาก URL
   const queryParams = new URLSearchParams(location.search);
@@ -30,8 +31,10 @@ function SearchEventPage() {
 
   const [searchTerm, setSearchTerm] = useState(initialSearchQuery);
   const [currentPage, setCurrentPage] = useState(1);
-  const [searchResults, setSearchResults] = useState<typeof mockEventsWithApproval>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchFilters, setSearchFilters] = useState<SearchFilterType[]>([
     { id: 'training', label: 'อบรม', checked: initialFilters.training },
     { id: 'volunteer', label: 'อาสา', checked: initialFilters.volunteer },
@@ -45,29 +48,74 @@ function SearchEventPage() {
     if (initialSearchQuery || Object.values(initialFilters).some(value => value)) {
       performSearch(initialSearchQuery, searchFilters);
     }
-  }, [userRole, userId]);
+  }, [isAuthenticated, userRole]);
 
   // ฟังก์ชันสำหรับการค้นหา
-  const performSearch = (query: string, filters: SearchFilterType[]) => {
-    // แปลง searchFilters เป็นรูปแบบที่ searchEvents ต้องการ
-    const filterOptions = {
-      training: filters.find(f => f.id === 'training')?.checked || false,
-      volunteer: filters.find(f => f.id === 'volunteer')?.checked || false,
-      helper: filters.find(f => f.id === 'helper')?.checked || false
-    };
+  const performSearch = async (query: string, filters: SearchFilterType[]) => {
+    setIsLoading(true);
+    setError(null);
     
-    // ใช้ฟังก์ชัน searchEvents ที่ปรับปรุงแล้วเพื่อให้คำนึงถึงสิทธิ์การเข้าถึง
-    const results = searchEvents(query, filterOptions, userRole, userId);
-    setSearchResults(results);
-    setSearchPerformed(true);
-    setCurrentPage(1);
+    try {
+      // ดึง token จาก localStorage
+      const authData = localStorage.getItem('authData');
+      const token = authData ? JSON.parse(authData).token : '';
+      
+      // สร้างสตริงค้นหาที่รวมทั้งคำค้นหาและฟิลเตอร์
+      let searchString = query || '';
+      
+      // เพิ่มฟิลเตอร์ประเภทเข้าไปในคำค้นหา
+      const typeFilter = filters.filter(f => f.checked).map(f => f.label).join(' ');
+      if (typeFilter) {
+        searchString += ` ${typeFilter}`;
+      }
+      
+      // ค้นหากิจกรรม
+      const result = await searchActivities(searchString, token);
+      
+      // ตรวจสอบผลลัพธ์
+      if (result && result.activities && Array.isArray(result.activities)) {
+        let activities = result.activities;
+        
+        // กรองตามสถานะการอนุมัติ
+        if (userRole === 'student' || !isAuthenticated) {
+          activities = filterApprovedActivities(activities);
+        }
+        
+        // กรองตามสถานะ (ไม่แสดง closed, cancelled)
+        activities = filterActiveActivities(activities);
+        
+        // กรองตามประเภท (ถ้ามีการเลือกฟิลเตอร์)
+        if (filters.some(f => f.checked)) {
+          activities = activities.filter(activity => {
+            // เช็คว่าประเภทของกิจกรรมตรงกับฟิลเตอร์ที่เลือกหรือไม่
+            if (filters.find(f => f.id === 'training')?.checked && activity.type.id === 1) return true;
+            if (filters.find(f => f.id === 'volunteer')?.checked && activity.type.id === 2) return true;
+            if (filters.find(f => f.id === 'helper')?.checked && activity.type.id === 3) return true;
+            // ถ้าไม่มีฟิลเตอร์ที่ตรงกัน คืนค่า false
+            return filters.every(f => !f.checked); // แสดงทั้งหมดถ้าไม่มีฟิลเตอร์
+          });
+        }
+        
+        setSearchResults(activities);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error('เกิดข้อผิดพลาดในการค้นหา:', err);
+      setError('เกิดข้อผิดพลาดในการค้นหา กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsLoading(false);
+      setSearchPerformed(true);
+    }
     
-    // อัพเดท URL search params
+    // อัพเดต URL search params
     const params = new URLSearchParams();
     if (query) params.set('q', query);
-    if (filterOptions.training) params.set('training', 'true');
-    if (filterOptions.volunteer) params.set('volunteer', 'true');
-    if (filterOptions.helper) params.set('helper', 'true');
+    filters.forEach(filter => {
+      if (filter.checked) {
+        params.set(filter.id, 'true');
+      }
+    });
     
     navigate({
       pathname: location.pathname,
@@ -104,7 +152,7 @@ function SearchEventPage() {
     return (
       <div className={`p-4 mb-6 rounded-lg ${theme === 'dark' ? 'bg-blue-900' : 'bg-blue-50'}`}>
         <p className={`text-sm ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>
-          <span className="font-bold">หมายเหตุ:</span> กิจกรรมที่แสดงต่อผู้ใช้ทั่วไปต้องมีสถานะ "อนุมัติ" เท่านั้น
+          <span className="font-bold">หมายเหตุ:</span> กิจกรรมที่แสดงต่อผู้ใช้ทั่วไปต้องมีสถานะ "approved" เท่านั้น
           {userRole === 'staff' && (
             <>
               {' '}คุณจะเห็นกิจกรรมที่รออนุมัติหรือไม่อนุมัติเฉพาะที่คุณสร้างขึ้นเท่านั้น
@@ -119,6 +167,11 @@ function SearchEventPage() {
       </div>
     );
   };
+
+  // แสดง LoadingPage เมื่อกำลังโหลดข้อมูล
+  if (isLoading) {
+    return <LoadingPage />;
+  }
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
@@ -146,6 +199,15 @@ function SearchEventPage() {
         {/* ข้อความแสดงสถานะการอนุมัติ (เฉพาะเจ้าหน้าที่และแอดมิน) */}
         {renderApprovalStatusInfo()}
         
+        {/* แสดงข้อความกรณีเกิดข้อผิดพลาด */}
+        {error && (
+          <div className={`mb-6 p-4 rounded-md ${
+            theme === 'dark' ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-700'
+          }`}>
+            {error}
+          </div>
+        )}
+        
         {/* แสดงผลการค้นหา */}
         {searchPerformed ? (
           searchResults.length > 0 ? (
@@ -158,10 +220,7 @@ function SearchEventPage() {
               {/* Event Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {currentEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    {...event}
-                  />
+                  <EventCard key={event.id} {...event} />
                 ))}
               </div>
               

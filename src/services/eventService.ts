@@ -210,3 +210,5 @@ export const eventTypeToTypeId = (eventType: string): string => {
       return 'training';
   }
 };
+
+
