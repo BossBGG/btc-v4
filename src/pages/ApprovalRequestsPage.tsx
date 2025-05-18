@@ -1,11 +1,33 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTheme } from "../stores/theme.store";
-import { mockParticipants } from "../data/mockParticipants";
+// import { mockParticipants } from "../data/mockParticipants";
+import { getActivitiesApi } from "../services/get_activitys_staff";
+import api from "../services/api";
+import { body } from "motion/react-client";
+type Registration = {
+  id: number;
+  userId: number;
+  registerId: string;
+  studentId: string;
+  name: string;
+  faculty: string;
+  nameactivity: string;
+  type: string;
+  major: string;
+  status: string;
+  // ใส่ fields อื่น ๆ ถ้ามี
+};
+function addRegistration(datass: Registration) {
+  registrations.push(datass);
+}
 
+let registrations: Registration[] = [];
 // ประเภทข้อมูลสำหรับผู้เข้าร่วมกิจกรรม
 interface ParticipantItem {
   id: string;
+  userId: string;
+  registerId: string;
   name: string;
   studentId: string;
   eventType: "อบรม" | "อาสา" | "ช่วยงาน";
@@ -13,7 +35,7 @@ interface ParticipantItem {
   faculty: string;
   major: string;
   registrationDate: string;
-  attendanceStatus: "มาเข้าร่วม" | "ไม่ได้เข้าร่วม" | "รอเข้าร่วม";
+  attendanceStatus: "approved" | "rejected" | "pending";
 }
 
 // ประเภทข้อมูลสำหรับกิจกรรม
@@ -37,7 +59,7 @@ type SortField =
   | "registrationDate"
   | "attendanceStatus"
   | "eventTitle"
-  | "eventType";  
+  | "eventType";
 type SortOrder = "asc" | "desc";
 
 function ApprovalRequestsPage() {
@@ -57,6 +79,63 @@ function ApprovalRequestsPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [filterType, setFilterType] = useState<string>("");
 
+  const get = async () => {
+    const response = await getActivitiesApi();
+    console.log('getActivitiesApi 3:', response);
+    const data = response.participants.map((value: any) => {
+      const date = new Date(value.registationDate);
+      const formattedDate = date.toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      return {
+        id: value.activityId,
+        userId: value.userId,
+        registerId: value.registrationId,
+        name: value.fullName,
+        studentId: value.studentId,
+        eventType: value.activityType,
+        eventTitle: value.activityName, // เพิ่มชื่อกิจกรรม
+        faculty: value.facultyName,
+        major: value.majorName,
+        registrationDate: formattedDate, // แสดงเฉพาะวันที่
+        attendanceStatus: value.registrationStatus,
+      };
+    })
+    console.log('getActivitiesApi 2:', data);
+
+    setParticipants(data);
+    // setParticipants();
+    // console.log(response.paticipants.map((value)=>{
+    //   return{
+    //   id: value.activityId,
+    //   name: value.firstName + " " + value.lastName,
+    //   studentId: value.studentId,
+    //   eventType: 'อบรม',
+    //   eventTitle: value.activityTitle, // เพิ่มชื่อกิจกรรม
+    //   faculty: string;
+    //   major: string;
+    //   registrationDate: string;
+    //   attendanceStatus: "มาเข้าร่วม" | "ไม่ได้เข้าร่วม" | "รอเข้าร่วม";
+    //   }
+    // }));
+
+
+  }
+
+
+  // โหลด activities เมื่อ component mount
+  useEffect(() => {
+    get();
+  }, []);
+
+
+
   // โหลดข้อมูลกิจกรรมและผู้เข้าร่วม
   useEffect(() => {
     // จำลองการโหลดข้อมูล (ในระบบจริงควรใช้ API)
@@ -69,18 +148,18 @@ function ApprovalRequestsPage() {
         id === "1"
           ? "BootCampCPE"
           : id === "2"
-          ? "ปลูกป่าชายเลนเพื่อโลกสีเขียว"
-          : id === "3"
-          ? "งานวิ่งการกุศล Run for Wildlife"
-          : `กิจกรรม ${id}`,
+            ? "ปลูกป่าชายเลนเพื่อโลกสีเขียว"
+            : id === "3"
+              ? "งานวิ่งการกุศล Run for Wildlife"
+              : `กิจกรรม ${id}`,
       eventType:
         id === "1"
           ? "อบรม"
           : id === "2"
-          ? "อาสา"
-          : id === "3"
-          ? "ช่วยงาน"
-          : "อบรม",
+            ? "อาสา"
+            : id === "3"
+              ? "ช่วยงาน"
+              : "อบรม",
       startDate: "17/05/2568",
       endDate: "18/05/2568",
       status: "รับสมัคร",
@@ -89,7 +168,7 @@ function ApprovalRequestsPage() {
     };
 
     setActivityDetail(mockActivityDetail);
-    setParticipants(mockParticipants);
+    // setParticipants(mockParticipants);
     setLoading(false);
   }, [id]);
 
@@ -126,22 +205,51 @@ function ApprovalRequestsPage() {
   };
 
   // ฟังก์ชันจัดการการเปลี่ยนสถานะการเข้าร่วม
-  const handleAttendanceChange = (
-    participantId: string,
-    status: "มาเข้าร่วม" | "ไม่ได้เข้าร่วม"
+  const handleAttendanceChange = async (
+    id: string,
+    registerId: string,
+    status: "approved" | "rejected"
   ) => {
     // อัพเดทสถานะของผู้เข้าร่วม
     const updatedParticipants = participants.map((participant) =>
-      participant.id === participantId
+      participant.id === registerId
         ? { ...participant, attendanceStatus: status }
         : participant
     );
 
-    // หลังจากอัพเดทสถานะ ให้นำผู้เข้าร่วมที่มีสถานะ "รอเข้าร่วม" มาแสดงเท่านั้น
-    setParticipants(updatedParticipants);
+    const data = localStorage.getItem("authData");
+const parsedData = data ? JSON.parse(data) : null;
+const token = parsedData?.token || "";
+
+console.log("Token:", token);
+
+// หลังจากอัพเดทสถานะ ให้นำผู้เข้าร่วมที่มีสถานะ "รอเข้าร่วม" มาแสดงเท่านั้น
+setParticipants(updatedParticipants);
+
+// แก้ไขตรงนี้ - แยก headers และ body ให้ถูกต้อง
+const response = await api.put(
+  `/api/activities/${id}/registrations/${registerId}`,
+  { status: status }, // นี่คือ body ที่ถูกต้อง
+  { 
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+    if (response.status === 200) {
+      // อัพเดทสถานะในฐานข้อมูล
+      const updatedParticipant = updatedParticipants.find(
+        (participant) => participant.id === registerId
+      );
+      if (updatedParticipant) {
+        updatedParticipant.attendanceStatus = status;
+      }
+    }
 
     // แจ้งเตือนว่าได้ดำเนินการเรียบร้อยแล้ว
-    if (status === "มาเข้าร่วม") {
+    if (status === "approved") {
       alert(`อนุมัติการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
     } else {
       alert(`ปฏิเสธการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
@@ -161,7 +269,7 @@ function ApprovalRequestsPage() {
           participant.eventTitle
             .toLowerCase()
             .includes(searchTerm.toLowerCase())) &&
-        participant.attendanceStatus === "รอเข้าร่วม" &&
+        participant.attendanceStatus === "pending" &&
         (filterType === "" || participant.eventType === filterType) // เพิ่มการกรองตามประเภทกิจกรรม
     )
     .sort((a, b) => {
@@ -192,11 +300,11 @@ function ApprovalRequestsPage() {
   // สีสถานะการเข้าร่วม
   const attendanceStatusColor = (status: string) => {
     switch (status) {
-      case "มาเข้าร่วม":
+      case "approved":
         return theme === "dark" ? "text-green-400" : "text-green-600";
-      case "ไม่ได้เข้าร่วม":
+      case "rejected":
         return theme === "dark" ? "text-red-400" : "text-red-600";
-      case "รอเข้าร่วม":
+      case "pending":
         return theme === "dark" ? "text-yellow-400" : "text-yellow-600";
       default:
         return "";
@@ -214,11 +322,10 @@ function ApprovalRequestsPage() {
   if (loading) {
     return (
       <div
-        className={`min-h-screen flex items-center justify-center ${
-          theme === "dark"
+        className={`min-h-screen flex items-center justify-center ${theme === "dark"
             ? "bg-gray-900 text-white"
             : "bg-gray-50 text-gray-800"
-        }`}
+          }`}
       >
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
@@ -229,20 +336,18 @@ function ApprovalRequestsPage() {
   if (!activityDetail) {
     return (
       <div
-        className={`min-h-screen flex flex-col items-center justify-center ${
-          theme === "dark"
+        className={`min-h-screen flex flex-col items-center justify-center ${theme === "dark"
             ? "bg-gray-900 text-white"
             : "bg-gray-50 text-gray-800"
-        }`}
+          }`}
       >
         <h1 className="text-2xl font-bold mb-4">ไม่พบข้อมูลกิจกรรม</h1>
         <button
           onClick={() => navigate("/staff/activities")}
-          className={`px-4 py-2 rounded-md ${
-            theme === "dark"
+          className={`px-4 py-2 rounded-md ${theme === "dark"
               ? "bg-blue-600 hover:bg-blue-700"
               : "bg-blue-600 hover:bg-blue-700"
-          } text-white`}
+            } text-white`}
         >
           กลับไปหน้ารายการกิจกรรม
         </button>
@@ -252,9 +357,8 @@ function ApprovalRequestsPage() {
 
   return (
     <div
-      className={`min-h-screen p-6 ${
-        theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"
-      }`}
+      className={`min-h-screen p-6 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"
+        }`}
     >
       <div className="container mx-auto">
         {/* ส่วนหัวของหน้า - แสดงข้อมูลกิจกรรม */}
@@ -262,9 +366,8 @@ function ApprovalRequestsPage() {
           <div className="flex items-center mb-2">
             <button
               onClick={() => navigate("/staff/activities")}
-              className={`mr-4 p-2 rounded-full ${
-                theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-200"
-              }`}
+              className={`mr-4 p-2 rounded-full ${theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-200"
+                }`}
             >
               <svg
                 className="w-6 h-6"
@@ -292,11 +395,10 @@ function ApprovalRequestsPage() {
               placeholder="ค้นหาผู้เข้าร่วม..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full px-4 py-2 rounded-md ${
-                theme === "dark"
+              className={`w-full px-4 py-2 rounded-md ${theme === "dark"
                   ? "bg-gray-800 border-gray-700 text-white placeholder-gray-400"
                   : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-              } border`}
+                } border`}
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3">
               <svg
@@ -319,11 +421,10 @@ function ApprovalRequestsPage() {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className={`w-full px-4 py-2 rounded-md ${
-                theme === "dark"
+              className={`w-full px-4 py-2 rounded-md ${theme === "dark"
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
-              } border`}
+                } border`}
             >
               <option value="">ทุกประเภท</option>
               <option value="อบรม">อบรม</option>
@@ -335,9 +436,8 @@ function ApprovalRequestsPage() {
 
         {/* ตารางแสดงรายชื่อผู้เข้าร่วม */}
         <div
-          className={`overflow-x-auto rounded-lg border ${
-            theme === "dark" ? "border-gray-700" : "border-gray-200"
-          }`}
+          className={`overflow-x-auto rounded-lg border ${theme === "dark" ? "border-gray-700" : "border-gray-200"
+            }`}
         >
           <table className="min-w-full divide-y divide-gray-200">
             <thead className={`${getHeaderBarColor()} text-white`}>
@@ -463,19 +563,17 @@ function ApprovalRequestsPage() {
               </tr>
             </thead>
             <tbody
-              className={`divide-y ${
-                theme === "dark"
+              className={`divide-y ${theme === "dark"
                   ? "divide-gray-700 bg-gray-800"
                   : "divide-gray-200 bg-white"
-              }`}
+                }`}
             >
               {currentItems.length > 0 ? (
                 currentItems.map((participant, index) => (
                   <tr
                     key={participant.id}
-                    className={`hover:${
-                      theme === "dark" ? "bg-gray-700" : "bg-gray-50"
-                    }`}
+                    className={`hover:${theme === "dark" ? "bg-gray-700" : "bg-gray-50"
+                      }`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                       {participant.name}
@@ -533,13 +631,12 @@ function ApprovalRequestsPage() {
                         {/* ปุ่มอนุมัติ */}
                         <button
                           onClick={() =>
-                            handleAttendanceChange(participant.id, "มาเข้าร่วม")
+                            handleAttendanceChange(participant.id, participant.registerId, "approved")
                           }
-                          className={`p-1 rounded-full ${
-                            theme === "dark"
+                          className={`p-1 rounded-full ${theme === "dark"
                               ? "text-green-400 hover:bg-gray-700"
                               : "text-green-600 hover:bg-gray-200"
-                          }`}
+                            }`}
                           title="อนุมัติ"
                         >
                           <svg
@@ -562,15 +659,14 @@ function ApprovalRequestsPage() {
                         <button
                           onClick={() =>
                             handleAttendanceChange(
-                              participant.id,
-                              "ไม่ได้เข้าร่วม"
+                              participant.id, participant.registerId,
+                              "rejected"
                             )
                           }
-                          className={`p-1 rounded-full ${
-                            theme === "dark"
+                          className={`p-1 rounded-full ${theme === "dark"
                               ? "text-red-400 hover:bg-gray-700"
                               : "text-red-600 hover:bg-gray-200"
-                          }`}
+                            }`}
                           title="ปฏิเสธ"
                         >
                           <svg
@@ -615,15 +711,13 @@ function ApprovalRequestsPage() {
                   setCurrentPage(currentPage > 1 ? currentPage - 1 : 1)
                 }
                 disabled={currentPage === 1}
-                className={`px-3 py-1 rounded-md ${
-                  currentPage === 1
+                className={`px-3 py-1 rounded-md ${currentPage === 1
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-gray-200"
-                } ${
-                  theme === "dark"
+                  } ${theme === "dark"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
                     : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                }`}
+                  }`}
                 aria-label="Previous page"
               >
                 <svg
@@ -656,15 +750,14 @@ function ApprovalRequestsPage() {
                   <button
                     key={i}
                     onClick={() => setCurrentPage(pageNumber)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-md ${
-                      currentPage === pageNumber
+                    className={`w-8 h-8 flex items-center justify-center rounded-md ${currentPage === pageNumber
                         ? theme === "dark"
                           ? "bg-blue-600 text-white"
                           : "bg-blue-600 text-white"
                         : theme === "dark"
-                        ? "bg-gray-700 text-white hover:bg-gray-600"
-                        : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                    }`}
+                          ? "bg-gray-700 text-white hover:bg-gray-600"
+                          : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
+                      }`}
                     aria-label={`Page ${pageNumber}`}
                     aria-current={
                       currentPage === pageNumber ? "page" : undefined
@@ -682,15 +775,13 @@ function ApprovalRequestsPage() {
                   )
                 }
                 disabled={currentPage === totalPages}
-                className={`px-3 py-1 rounded-md ${
-                  currentPage === totalPages
+                className={`px-3 py-1 rounded-md ${currentPage === totalPages
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-gray-200"
-                } ${
-                  theme === "dark"
+                  } ${theme === "dark"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
                     : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                }`}
+                  }`}
                 aria-label="Next page"
               >
                 <svg

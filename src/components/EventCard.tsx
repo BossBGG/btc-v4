@@ -63,7 +63,7 @@ function EventCard({
       {/* ส่วนรูปภาพและแท็กประเภทกิจกรรม */}
       <div className="relative h-44">
         <img 
-          src={image || '/api/placeholder/400/320'} 
+          src={image || '/inet1.png'} 
           alt={title} 
           className="w-full h-full object-cover"
         />

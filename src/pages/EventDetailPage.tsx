@@ -440,8 +440,8 @@ function EventDetailPage() {
                   <img
                     src={event.imageUrl ? (event.imageUrl.startsWith('http') 
                       ? event.imageUrl 
-                      : `https://bootcampp.karinwdev.site${event.imageUrl}`) 
-                      : "/api/placeholder/600/400"}
+                      : `/inet1.png`) 
+                      : "/inet1.png"}
                     alt={event.title}
                     className="w-full h-64 object-cover rounded-lg mb-4"
                     onError={(e) => {

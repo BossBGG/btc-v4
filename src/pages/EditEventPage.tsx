@@ -996,7 +996,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   type="file"
                   id="image"
                   name="image"
-                  accept="image/*"
+                  accept="/inet1.png*"
                   onChange={handleImageChange}
                   className="hidden"
                 />

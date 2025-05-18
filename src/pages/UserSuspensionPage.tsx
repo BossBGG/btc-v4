@@ -37,24 +37,34 @@ function UserSuspensionPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const getAllUsers = async (page = 1, limit = 10) => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const user = localStorage.getItem('authData');
       const parsedUser = user ? JSON.parse(user) : null;
       const accessToken = parsedUser?.token;
+      
+      if (!accessToken) {
+        setError('ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
       
       // เพิ่มพารามิเตอร์การเรียงข้อมูลและการค้นหา
       let queryParams = `page=${page}&limit=${limit}`;
       
       // ถ้ามีคำค้นหา ให้ส่งไปกับ API ด้วย
       if (searchTerm) {
-        queryParams += `&keyword=${searchTerm}`;
+        queryParams += `&keyword=${encodeURIComponent(searchTerm)}`;
       }
       
       // ถ้ามีการกรองตามบทบาท
       if (filterRole) {
-        queryParams += `&role=${filterRole}`;
+        queryParams += `&role=${encodeURIComponent(filterRole)}`;
       }
       
       // ถ้ามีการกรองตามสถานะ
@@ -69,35 +79,45 @@ function UserSuspensionPage() {
 
       console.log('Query Params:', queryParams);
       
-      const response = await api.get(`/admin/users?${queryParams}`, {
+      const response = await api.get(`/api/admin/users?${queryParams}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
 
       if (response.status === 200) {
-        const data = response.data.users.map((user: UserItem) => ({
-          ...user,
-          name: `${user.firstName} ${user.lastName}`
-        }));
-        setUsers(data);
-        
-        // เก็บข้อมูลการแบ่งหน้าจาก response
-        if (response.data.totalPages) {
-          setTotalPages(response.data.totalPages);
-        } else if (response.data.pagination?.totalPages) {
-          setTotalPages(response.data.pagination.totalPages);
+        // ตรวจสอบว่า response มีรูปแบบตามที่คาดหวัง
+        if (response.data && Array.isArray(response.data.users)) {
+          const data = response.data.users.map((user: UserItem) => ({
+            ...user,
+            name: `${user.firstName} ${user.lastName}`
+          }));
+          setUsers(data);
+          
+          // เก็บข้อมูลการแบ่งหน้าจาก response
+          if (response.data.totalPages) {
+            setTotalPages(response.data.totalPages);
+          } else if (response.data.pagination?.totalPages) {
+            setTotalPages(response.data.pagination.totalPages);
+          } else {
+            // ถ้าไม่มีข้อมูลจาก API ให้คำนวณจากจำนวนข้อมูลที่ได้รับ
+            setTotalPages(Math.ceil(data.length / itemsPerPage));
+          }
+          
+          console.log('Users fetched successfully:', data);
         } else {
-          // ถ้าไม่มีข้อมูลจาก API ให้คำนวณจากจำนวนข้อมูลที่ได้รับ
-          setTotalPages(Math.ceil(data.length / itemsPerPage));
+          console.error('Unexpected API response format:', response.data);
+          setError('รูปแบบข้อมูลที่ได้รับจาก API ไม่ถูกต้อง');
         }
-        
-        console.log('Users fetched successfully:', data);
       } else {
         console.error('Error fetching users:', response.statusText);
+        setError(`เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้: ${response.statusText}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching users:', error);
+      setError(error.response?.data?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -125,57 +145,75 @@ function UserSuspensionPage() {
       setSortField(apiField as SortField);
       setSortOrder('asc');
     }
-    
-    // เรียกข้อมูลใหม่ทันทีเมื่อมีการเปลี่ยนแปลงการเรียงลำดับ
-    getAllUsers(currentPage, itemsPerPage);
   };
 
   // ฟังก์ชันจัดการการระงับบัญชี
   const handleSuspendUser = async (id: number) => {
     try {
+      setLoading(true);
       const user = localStorage.getItem('authData');
       const parsedUser = user ? JSON.parse(user) : null;
       const accessToken = parsedUser?.token;
 
-      // เรียก API สำหรับระงับหรือยกเลิกการระงับบัญชี
-      const targetUser = users.find(user => user.id === Number(id));
-      const isSuspending = !targetUser?.isBanned; // ค่าตรงข้ามกับสถานะปัจจุบัน
-
-      const comment = window.prompt('กรุณาระบุเหตุผลในการระงับ/ยกเลิกระงับบัญชี (ถ้ามี):', '');
-
-      if (comment === null) {
-        // ถ้าผู้ใช้กด Cancel ให้ไม่ทำอะไร
+      if (!accessToken) {
+        setError('ไม่พบ token สำหรับการยืนยันตัวตน กรุณาเข้าสู่ระบบใหม่');
         return;
       }
 
-      console.log(comment, id)
-      // ส่งคำขอไปยัง API
-      await api.put(
-        `/admin/users/${id}/ban`,
-        {
-          action: isSuspending ? 'ban' : 'unban',
-          reason: comment
+      // เรียก API สำหรับระงับหรือยกเลิกการระงับบัญชี
+      const targetUser = users.find(user => user.id === id);
+      if (!targetUser) {
+        setError('ไม่พบข้อมูลผู้ใช้ที่ต้องการระงับ/ยกเลิกการระงับ');
+        return;
+      }
+      
+      const isSuspending = !targetUser.isBanned; // ค่าตรงข้ามกับสถานะปัจจุบัน
+      const status = isSuspending ? 'banned' : 'active';
+
+      const reason = window.prompt(
+        `กรุณาระบุเหตุผลในการ${isSuspending ? 'ระงับ' : 'ยกเลิกการระงับ'}บัญชี:`,
+        ''
+      );
+
+      if (reason === null) {
+        // ถ้าผู้ใช้กด Cancel ให้ไม่ทำอะไร
+        setLoading(false);
+        return;
+      }
+
+      // ส่งคำขอไปยัง API ตามรูปแบบที่เห็นในภาพ
+      const response = await api.put(
+        `/api/admin/users/${id}/ban`,
+        { 
+          status, 
+          reason
         },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
           },
         }
       );
 
-      // อัพเดทข้อมูลผู้ใช้ในหน้าจอ
-      setUsers(users.map(user => 
-        user.id === Number(id)
-          ? { ...user, isBanned: !user.isBanned, name: `${user.firstName} ${user.lastName}` }
-          : { ...user, name: `${user.firstName} ${user.lastName}` }
-      ));
+      if (response.status === 200) {
+        // อัพเดทข้อมูลผู้ใช้ในหน้าจอ
+        setUsers(users.map(user => 
+          user.id === id
+            ? { ...user, isBanned: !user.isBanned }
+            : user
+        ));
 
-      // แสดง Alert หรือข้อความยืนยัน (ทำเพิ่มเติมถ้าต้องการ)
-      alert(`${isSuspending ? 'ระงับบัญชี' : 'ยกเลิกการระงับบัญชี'}สำเร็จ`);
-
-    } catch (error) {
+        // แสดง Alert หรือข้อความยืนยัน
+        alert(`${isSuspending ? 'ระงับบัญชี' : 'ยกเลิกการระงับบัญชี'}สำเร็จ`);
+      } else {
+        setError(`เกิดข้อผิดพลาด: ${response.statusText}`);
+      }
+    } catch (error: any) {
       console.error('Error updating user suspension status:', error);
-      alert('เกิดข้อผิดพลาดในการอัพเดทสถานะบัญชี กรุณาลองใหม่อีกครั้ง');
+      setError(error.response?.data?.message || 'เกิดข้อผิดพลาดในการอัพเดทสถานะบัญชี กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -196,6 +234,12 @@ function UserSuspensionPage() {
     <div className={`min-h-screen p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-800'}`}>
       <div className="container mx-auto">
         <h1 className="text-2xl font-bold mb-6">ระบบระงับบัญชีผู้ใช้</h1>
+        
+        {error && (
+          <div className={`mb-4 p-3 rounded ${theme === 'dark' ? 'bg-red-900 text-red-100' : 'bg-red-100 text-red-700'}`}>
+            {error}
+          </div>
+        )}
         
         {/* ส่วนค้นหาและตัวกรอง */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -242,8 +286,6 @@ function UserSuspensionPage() {
               onChange={(e) => {
                 setFilterRole(e.target.value);
                 setCurrentPage(1); // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง
-                // เรียกใหม่โดยส่งหน้าแรก
-                getAllUsers(1, itemsPerPage);
               }}
               className={`w-full px-4 py-2 rounded-md ${
                 theme === 'dark' 
@@ -265,8 +307,6 @@ function UserSuspensionPage() {
               onChange={(e) => {
                 setFilterStatus(e.target.value);
                 setCurrentPage(1); // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง
-                // เรียกใหม่โดยส่งหน้าแรก
-                getAllUsers(1, itemsPerPage);
               }}
               className={`w-full px-4 py-2 rounded-md ${
                 theme === 'dark' 
@@ -280,6 +320,13 @@ function UserSuspensionPage() {
             </select>
           </div>
         </div>
+        
+        {/* แสดง loading indicator */}
+        {loading && (
+          <div className="flex justify-center my-8">
+            <div className={`animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 ${theme === 'dark' ? 'border-blue-500' : 'border-blue-700'}`}></div>
+          </div>
+        )}
         
         {/* ตารางผู้ใช้งาน */}
         <div className={`overflow-x-auto rounded-lg border ${
@@ -438,22 +485,24 @@ function UserSuspensionPage() {
                       ) : user.isBanned ? (
                         <button
                           onClick={() => handleSuspendUser(user.id)}
+                          disabled={loading}
                           className={`px-3 py-1 rounded-md ${
                             theme === 'dark' 
                               ? 'bg-green-600 hover:bg-green-700' 
                               : 'bg-green-600 hover:bg-green-700'
-                          } text-white text-xs`}
+                          } text-white text-xs ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           ยกเลิกระงับบัญชี
                         </button>
                       ) : (
                         <button
                           onClick={() => handleSuspendUser(user.id)}
+                          disabled={loading}
                           className={`px-3 py-1 rounded-md ${
                             theme === 'dark' 
                               ? 'bg-red-600 hover:bg-red-700' 
                               : 'bg-red-600 hover:bg-red-700'
-                          } text-white text-xs`}
+                          } text-white text-xs ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           ระงับบัญชี
                         </button>
@@ -467,7 +516,7 @@ function UserSuspensionPage() {
                     colSpan={7}
                     className="px-6 py-4 text-center text-sm font-medium"
                   >
-                    ไม่พบผู้ใช้งานที่ตรงกับเงื่อนไขการค้นหา
+                    {loading ? 'กำลังโหลดข้อมูล...' : 'ไม่พบผู้ใช้งานที่ตรงกับเงื่อนไขการค้นหา'}
                   </td>
                 </tr>
               )}
@@ -482,9 +531,9 @@ function UserSuspensionPage() {
               {/* ปุ่มย้อนกลับ */}
               <button
                 onClick={() => setCurrentPage(currentPage > 1 ? currentPage - 1 : 1)}
-                disabled={currentPage === 1}
+                disabled={currentPage === 1 || loading}
                 className={`px-3 py-1 rounded-md ${
-                  currentPage === 1
+                  currentPage === 1 || loading
                     ? 'opacity-50 cursor-not-allowed'
                     : 'hover:bg-gray-200'
                 } ${
@@ -515,6 +564,7 @@ function UserSuspensionPage() {
                     <button
                       key={i}
                       onClick={() => setCurrentPage(i)}
+                      disabled={loading}
                       className={`w-8 h-8 flex items-center justify-center rounded-md ${
                         currentPage === i
                           ? theme === 'dark'
@@ -523,7 +573,7 @@ function UserSuspensionPage() {
                           : theme === 'dark'
                             ? 'bg-gray-700 text-white hover:bg-gray-600'
                             : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                      }`}
+                      } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {i}
                     </button>
@@ -535,9 +585,9 @@ function UserSuspensionPage() {
               {/* ปุ่มไปหน้าถัดไป */}
               <button
                 onClick={() => setCurrentPage(currentPage + 1)}
-                disabled={currentPage >= totalPages} // ใช้ totalPages จาก API
+                disabled={currentPage >= totalPages || loading} // ใช้ totalPages จาก API
                 className={`px-3 py-1 rounded-md ${
-                  currentPage >= totalPages
+                  currentPage >= totalPages || loading
                     ? 'opacity-50 cursor-not-allowed'
                     : 'hover:bg-gray-200'
                 } ${
