@@ -67,9 +67,26 @@ function HomePage() {
       try {
         // ดึง token จาก localStorage
         const authData = localStorage.getItem("authData");
-        const token = authData ? JSON.parse(authData).token : "";
+        let token = '';
+        
+        if (authData) {
+          try {
+            const parsedAuthData = JSON.parse(authData);
+            if (parsedAuthData && parsedAuthData.token) {
+              token = parsedAuthData.token;
+              console.log('Using token from authData:', token.substring(0, 10) + '...');
+            }
+          } catch (e) {
+            console.error('Failed to parse auth data:', e);
+          }
+        } else {
+          console.log('No auth data found in localStorage');
+        }
 
+        // ถ้ายังไม่ได้ login เราอาจจะต้องแสดงกิจกรรมที่เปิดเผยต่อสาธารณะ
+        // หรือเราอาจจะต้องแสดงข้อความให้ login ก่อน
         const result = await getAllActivities(token);
+        console.log('API result:', result);
 
         // ตรวจสอบว่ามีข้อมูลกิจกรรมหรือไม่
         if (result && result.activities && Array.isArray(result.activities)) {
@@ -110,12 +127,19 @@ function HomePage() {
           );
         } else {
           // กรณีไม่พบข้อมูลกิจกรรม
+          console.log('No activities found in API response');
           setAllActivities([]);
           setTrainingActivities([]);
           setVolunteerActivities([]);
           setHelperActivities([]);
           setFilteredActivities([]);
-          setError("ไม่พบข้อมูลกิจกรรม");
+          
+          // ถ้ามี error message จาก API
+          if (result && result.error) {
+            setError(result.error);
+          } else {
+            setError("ไม่พบข้อมูลกิจกรรม");
+          }
         }
       } catch (err) {
         console.error("เกิดข้อผิดพลาดในการดึงข้อมูลกิจกรรม:", err);
@@ -216,6 +240,46 @@ function HomePage() {
   // แสดง LoadingPage ถ้ากำลังโหลดข้อมูล
   if (isLoading) {
     return <LoadingPage />;
+  }
+
+  // แสดงข้อความ error ถ้าไม่สามารถโหลดข้อมูลได้
+  if (error && (!allActivities.length && !trainingActivities.length && !volunteerActivities.length && !helperActivities.length)) {
+    return (
+      <div className={`min-h-screen ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"}`}>
+        <SearchBar className="px-6 py-4" onSearch={handleSearch} />
+        <div className="p-6 pb-12">
+          <h1 className={`text-2xl font-bold mb-6 ${theme === "dark" ? "text-white" : "text-gray-800"}`}>
+            กิจกรรมของมหาวิทยาลัย
+          </h1>
+          
+          <div className={`mb-6 p-4 rounded-lg ${theme === "dark" ? "bg-red-900 text-red-200" : "bg-red-100 text-red-700"}`}>
+            <p className="mb-2 font-medium">ไม่สามารถโหลดข้อมูลกิจกรรมได้</p>
+            <p>{error}</p>
+            {!isAuthenticated && (
+              <div className="mt-4">
+                <p className="mb-2">คุณอาจจะยังไม่ได้เข้าสู่ระบบ โปรดเข้าสู่ระบบเพื่อดูกิจกรรมทั้งหมด</p>
+                <button
+                  onClick={() => navigate('/login')}
+                  className={`px-4 py-2 ${theme === "dark" ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-600 hover:bg-blue-700"} text-white rounded-md`}
+                >
+                  เข้าสู่ระบบ
+                </button>
+              </div>
+            )}
+          </div>
+          
+          <div className="mb-8">
+            <Carousel
+              images={carouselImages}
+              autoPlay={true}
+              interval={5000}
+              showIndicators={true}
+              showArrows={true}
+            />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -340,93 +404,113 @@ function HomePage() {
                       onClick={() => navigate("/events/training")}
                       className={`px-4 py-2 rounded-md ${
                         theme === "dark"
-                          ? "bg-gray-700 hover:bg-gray-600 text-white"
-                          : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-                      }`}
-                    >
-                      ดูเพิ่มเติม
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {volunteerActivities.length > 0 && (
-              <div className="mb-10">
-                <h2 className="text-xl font-bold mb-4 flex items-center">
-                  กิจกรรม <span className="ml-2 text-green-600">อาสา</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {volunteerActivities.slice(0, 3).map((activity) => (
-                    <EventCard key={activity.id} {...activity} />
-                  ))}
+                        ? "bg-gray-700 hover:bg-gray-600 text-white"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                    }`}
+                  >
+                    ดูเพิ่มเติม
+                  </button>
                 </div>
-                {volunteerActivities.length > 3 && (
-                  <div className="mt-4 text-center">
-                    <button
-                      onClick={() => navigate("/events/volunteer")}
-                      className={`px-4 py-2 rounded-md ${
-                        theme === "dark"
-                          ? "bg-gray-700 hover:bg-gray-600 text-white"
-                          : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-                      }`}
-                    >
-                      ดูเพิ่มเติม
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {helperActivities.length > 0 && (
-              <div className="mb-10">
-                <h2 className="text-xl font-bold mb-4 flex items-center">
-                  กิจกรรม <span className="ml-2 text-purple-600">ช่วยงาน</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {helperActivities.slice(0, 3).map((activity) => (
-                    <EventCard key={activity.id} {...activity} />
-                  ))}
+          {volunteerActivities.length > 0 && (
+            <div className="mb-10">
+              <h2 className="text-xl font-bold mb-4 flex items-center">
+                กิจกรรม <span className="ml-2 text-green-600">อาสา</span>
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {volunteerActivities.slice(0, 3).map((activity) => (
+                  <EventCard key={activity.id} {...activity} />
+                ))}
+              </div>
+              {volunteerActivities.length > 3 && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/events/volunteer")}
+                    className={`px-4 py-2 rounded-md ${
+                      theme === "dark"
+                        ? "bg-gray-700 hover:bg-gray-600 text-white"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                    }`}
+                  >
+                    ดูเพิ่มเติม
+                  </button>
                 </div>
-                {helperActivities.length > 3 && (
-                  <div className="mt-4 text-center">
-                    <button
-                      onClick={() => navigate("/events/helper")}
-                      className={`px-4 py-2 rounded-md ${
-                        theme === "dark"
-                          ? "bg-gray-700 hover:bg-gray-600 text-white"
-                          : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-                      }`}
-                    >
-                      ดูเพิ่มเติม
-                    </button>
-                  </div>
-                )}
+              )}
+            </div>
+          )}
+
+          {helperActivities.length > 0 && (
+            <div className="mb-10">
+              <h2 className="text-xl font-bold mb-4 flex items-center">
+                กิจกรรม <span className="ml-2 text-purple-600">ช่วยงาน</span>
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {helperActivities.slice(0, 3).map((activity) => (
+                  <EventCard key={activity.id} {...activity} />
+                ))}
               </div>
-            )}
-          </>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredActivities.length > 0 ? (
-              filteredActivities.map((activity) => (
-                <EventCard key={activity.id} {...activity} />
-              ))
-            ) : (
-              <div className="col-span-3 text-center py-10">
-                <p
-                  className={`text-lg ${
-                    theme === "dark" ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  ไม่พบกิจกรรมในหมวดหมู่นี้
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+              {helperActivities.length > 3 && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => navigate("/events/helper")}
+                    className={`px-4 py-2 rounded-md ${
+                      theme === "dark"
+                        ? "bg-gray-700 hover:bg-gray-600 text-white"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                    }`}
+                  >
+                    ดูเพิ่มเติม
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* กรณีไม่มีกิจกรรมใดๆ ให้แสดงข้อความ */}
+          {trainingActivities.length === 0 && volunteerActivities.length === 0 && helperActivities.length === 0 && (
+            <div className="text-center py-10">
+              <p className={`text-lg ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                ไม่พบกิจกรรมในขณะนี้
+              </p>
+              {!isAuthenticated && (
+                <div className="mt-4">
+                  <p className="mb-2">คุณอาจจะยังไม่ได้เข้าสู่ระบบ โปรดเข้าสู่ระบบเพื่อดูกิจกรรมทั้งหมด</p>
+                  <button
+                    onClick={() => navigate('/login')}
+                    className={`px-4 py-2 ${theme === "dark" ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-600 hover:bg-blue-700"} text-white rounded-md`}
+                  >
+                    เข้าสู่ระบบ
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredActivities.length > 0 ? (
+            filteredActivities.map((activity) => (
+              <EventCard key={activity.id} {...activity} />
+            ))
+          ) : (
+            <div className="col-span-3 text-center py-10">
+              <p
+                className={`text-lg ${
+                  theme === "dark" ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
+                ไม่พบกิจกรรมในหมวดหมู่นี้
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 }
 
 export default HomePage;

@@ -81,9 +81,18 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
     // Load auth data on application start
     checkAuth();
   }, []);
-
   const login = (user: UserData, token: string) => {
-    console.log('Login with user:', user);
+    console.log('Login attempt with:', { 
+      userId: user.id,
+      studentId: user.studentId,
+      role: user.role,
+      hasToken: !!token
+    });
+    
+    if (!user || !token) {
+      console.error('Invalid login data:', { hasUser: !!user, hasToken: !!token });
+      return;
+    }
     
     setIsAuthenticated(true);
     setUserRole(user.role);

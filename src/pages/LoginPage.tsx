@@ -5,7 +5,6 @@ import { ThreeDMarquee } from '../components/ui/3d-marquee';
 
 const marqueeItems = [
 
-  
   "/cws.png",
   "/skd.png",
   "/inet1.png",
@@ -54,69 +53,51 @@ function LoginPage() {
 
   // No longer needed to detect role from student ID as the API will handle this
 
-  // ส่วนที่ต้องแก้ในไฟล์ LoginPage.tsx
-const onLoginSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setErrorMessage(null);
+  const onLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
 
-  // Validate input
-  if (!/^\d{8}$/.test(studentId)) {
-    setErrorMessage('รหัสนิสิตต้องเป็นตัวเลข 8 หลัก');
-    return;
-  }
-  
-  if (!password) {
-    setErrorMessage('กรุณากรอกรหัสผ่าน');
-    return;
-  }
-
-  try {
-    console.log('Attempting login with:', { studentId, password });
-    
-    // Call login function from auth hook
-    const result = await handleLogin({ studentId, password });
-    
-    console.log('Login result:', result);
-    
-    if (result.error) {
-      setErrorMessage(result.error);
+    // Validate input
+    if (!/^\d{8}$/.test(studentId)) {
+      setErrorMessage('รหัสนิสิตต้องเป็นตัวเลข 8 หลัก');
       return;
     }
     
-    // ตรวจสอบว่ามี user และ role หรือไม่
-    if (!result.user || !result.user.role) {
-      setErrorMessage('ข้อมูลผู้ใช้ไม่ถูกต้อง');
+    if (!password) {
+      setErrorMessage('กรุณากรอกรหัสผ่าน');
       return;
     }
-    
-    // ถ้าไม่มี token แต่ login สำเร็จ ให้สร้าง token ปลอมขึ้นมา
-    if (!result.tokens || !result.tokens.accessToken) {
-      console.warn('Login successful but no token received');
-      // สร้าง dummy token เพื่อให้ระบบทำงานต่อไปได้
-      result.tokens = { 
-        accessToken: `dummy_token_${Date.now()}` 
-      };
-    }
-    
-    // Set login role from API response for display
-    setLoginRole(result.user.role);
 
-    // Save rememberMe preference if needed
-    if (rememberMe) {
-      localStorage.setItem('rememberStudentId', studentId);
-    } else {
-      localStorage.removeItem('rememberStudentId');
-    }
+    try {
+      // Call login function from auth hook
+      const result = await handleLogin({ studentId, password });
+      
+      if (result.error) {
+        setErrorMessage(result.error);
+        return;
+      }
+      
+      // Set login role from API response for display
+      if (result.user && result.user.role) {
+        setLoginRole(result.user.role);
+      }
 
-    // แสดง Role ที่เข้าสู่ระบบในคอนโซล
-    console.log(`User logged in as: ${result.user.role}`);
-    
-    // Navigation will happen automatically due to the isAuthenticated useEffect
-  } catch (error: any) {
-    console.error('Login process error:', error);
-    setErrorMessage('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
-  }
-};
+      // Save rememberMe preference if needed
+      if (rememberMe) {
+        localStorage.setItem('rememberStudentId', studentId);
+      } else {
+        localStorage.removeItem('rememberStudentId');
+      }
+
+      // แสดง Role ที่เข้าสู่ระบบในคอนโซล
+      console.log(`User logged in as: ${result.user.role}`);
+      
+      // Navigation will happen automatically due to the isAuthenticated useEffect
+    } catch (error) {
+      console.error('Login error:', error);
+      setErrorMessage('เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+    }
+  };
 
   // Toggle password visibility
   const togglePasswordVisibility = () => {
@@ -131,6 +112,7 @@ const onLoginSubmit = async (e: React.FormEvent) => {
       setRememberMe(true);
     }
   }, []);
+
 
   return (
     <div className="min-h-screen flex">
