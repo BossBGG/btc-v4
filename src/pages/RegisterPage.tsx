@@ -144,7 +144,7 @@ function RegisterPage() {
             alt="ระบบจัดการงานอาสา" 
             className="h-12 w-12"
           />
-          <h1 className="text-lg font-bold text-gray-800 ml-2">ระบบจัดการงานอาสาและกิจกรรมมหาวิทยาลัย</h1>
+          <h1 className="text-lg font-bold text-gray-800 ml-2">VolunteerHub </h1>
         </div>
         
         {/* Registration form */}

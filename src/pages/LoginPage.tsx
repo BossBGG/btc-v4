@@ -134,7 +134,7 @@ function LoginPage() {
         <div className="flex items-center mb-8">
           <img src="/logo.png" alt="ระบบจัดการงานอาสา" className="h-12 w-12" />
           <h1 className="text-lg font-bold text-gray-800 ml-2">
-            ระบบจัดการงานอาสาและกิจกรรมมหาวิทยาลัย
+          VolunteerHub 
           </h1>
         </div>
 
