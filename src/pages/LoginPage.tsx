@@ -1,6 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/UseAuth.hook';
+import { ThreeDMarquee } from '../components/ui/3d-marquee';
+
+const marqueeItems = [
+
+  
+  "/cws.png",
+  "/skd.png",
+  "/inet1.png",
+  "/inet2.png",
+  "/skps.png",
+  "/snd.png",
+  "/uxui.png",
+  "/cpe.png",
+];
 
 function LoginPage() {
   const [studentId, setStudentId] = useState('');
@@ -252,7 +266,17 @@ const onLoginSubmit = async (e: React.FormEvent) => {
       </div>
 
       {/* Right side - Blue background */}
-      <div className="hidden md:block md:w-1/2 lg:w-2/3 bg-blue-500"></div>
+      <div className="hidden md:block md:w-1/2 lg:w-2/3 relative bg-gradient-to-br from-blue-500 to-blue-700 overflow-hidden">
+  {/* เพิ่ม relative กับ div ครอบนอก และปรับ background ให้สวยงาม */}
+  
+  {/* แก้ไข: ลบ absolute, inset-0 และใช้ h-full w-full ให้เต็มพื้นที่ */}
+  <ThreeDMarquee 
+    images={marqueeItems} 
+    speed={15} 
+    direction="left" 
+    className="h-full w-full"
+  />
+  </div>
     </div>
   );
 }

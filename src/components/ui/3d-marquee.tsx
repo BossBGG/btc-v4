@@ -2,52 +2,65 @@
 
 import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
+
+// เพิ่ม utilities นี้หากคุณไม่มี lib/utils.ts
+// const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
+
 export const ThreeDMarquee = ({
   images,
   className,
+  speed = 10,
+  direction = "left",
 }: {
   images: string[];
   className?: string;
+  speed?: number;
+  direction?: "left" | "right" | "up" | "down";
 }) => {
+  console.log("ThreeDMarquee received images:", images);
+
   // Split the images array into 4 equal parts
   const chunkSize = Math.ceil(images.length / 4);
   const chunks = Array.from({ length: 4 }, (_, colIndex) => {
     const start = colIndex * chunkSize;
     return images.slice(start, start + chunkSize);
   });
+
   return (
     <div
       className={cn(
-        "mx-auto block h-[600px] overflow-hidden rounded-2xl max-sm:h-100",
+        "relative w-full h-full overflow-hidden",  // แก้ไข: ปรับ class เพื่อให้ขนาดเท่ากับ parent
         className,
       )}
     >
-      <div className="flex size-full items-center justify-center">
-        <div className="size-[1720px] shrink-0 scale-50 sm:scale-75 lg:scale-100">
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-[100%] h-[100%]"> {/* แก้ไข: ไม่ใช้ size-[1720px] แต่ใช้ percentage */}
           <div
             style={{
-              transform: "rotateX(55deg) rotateY(0deg) rotateZ(-45deg)",
+              transform: "rotateX(35deg) rotateY(0deg) rotateZ(-25deg)", // แก้ไข: ปรับค่า rotation ให้น้อยลง
+              transformStyle: "preserve-3d",
+              transformOrigin: "center center", // แก้ไข: ปรับ origin ให้อยู่ตรงกลาง
             }}
-            className="relative top-96 right-[50%] grid size-full origin-top-left grid-cols-4 gap-8 transform-3d"
+            className="relative w-full h-full grid grid-cols-4 gap-4 mt-22 ml-8" // แก้ไข: ลบ right-[50%] top-96
           >
             {chunks.map((subarray, colIndex) => (
               <motion.div
-                animate={{ y: colIndex % 2 === 0 ? 100 : -100 }}
+                animate={{ y: colIndex % 2 === 0 ? 50 : -50 }} // แก้ไข: ลดขนาดการเคลื่อนที่ลง
                 transition={{
                   duration: colIndex % 2 === 0 ? 10 : 15,
                   repeat: Infinity,
                   repeatType: "reverse",
                 }}
                 key={colIndex + "marquee"}
-                className="flex flex-col items-start gap-8"
+                className="flex flex-col items-start gap-4"  // แก้ไข: ลดขนาด gap
               >
-                <GridLineVertical className="-left-4" offset="80px" />
+                <GridLineVertical className="-left-2" offset="40px" /> {/* แก้ไข: ปรับตำแหน่ง */}
                 {subarray.map((image, imageIndex) => (
                   <div className="relative" key={imageIndex + image}>
-                    <GridLineHorizontal className="-top-4" offset="20px" />
+                    <GridLineHorizontal className="-top-2" offset="10px" /> {/* แก้ไข: ปรับตำแหน่ง */}
                     <motion.img
                       whileHover={{
-                        y: -10,
+                        y: -5, // แก้ไข: ลดการเคลื่อนไหวตอน hover
                       }}
                       transition={{
                         duration: 0.3,
@@ -56,9 +69,11 @@ export const ThreeDMarquee = ({
                       key={imageIndex + image}
                       src={image}
                       alt={`Image ${imageIndex + 1}`}
-                      className="aspect-[970/700] rounded-lg object-cover ring ring-gray-950/5 hover:shadow-2xl"
-                      width={970}
-                      height={700}
+                      className="w-full h-auto aspect-[25/20] rounded-lg object-cover ring ring-gray-950/5 hover:shadow-2xl "
+                      onError={(e) => {
+                        console.error(`Image failed to load: ${image}`);
+                        (e.target as HTMLImageElement).src = "/logo.png";
+                      }}
                     />
                   </div>
                 ))}
@@ -97,7 +112,6 @@ const GridLineHorizontal = ({
         "bg-[linear-gradient(to_right,var(--color),var(--color)_50%,transparent_0,transparent)]",
         "[background-size:var(--width)_var(--height)]",
         "[mask:linear-gradient(to_left,var(--background)_var(--fade-stop),transparent),_linear-gradient(to_right,var(--background)_var(--fade-stop),transparent),_linear-gradient(black,black)]",
-        "[mask-composite:exclude]",
         "z-30",
         "dark:bg-[linear-gradient(to_right,var(--color-dark),var(--color-dark)_50%,transparent_0,transparent)]",
         className,
@@ -132,7 +146,6 @@ const GridLineVertical = ({
         "bg-[linear-gradient(to_bottom,var(--color),var(--color)_50%,transparent_0,transparent)]",
         "[background-size:var(--width)_var(--height)]",
         "[mask:linear-gradient(to_top,var(--background)_var(--fade-stop),transparent),_linear-gradient(to_bottom,var(--background)_var(--fade-stop),transparent),_linear-gradient(black,black)]",
-        "[mask-composite:exclude]",
         "z-30",
         "dark:bg-[linear-gradient(to_bottom,var(--color-dark),var(--color-dark)_50%,transparent_0,transparent)]",
         className,
