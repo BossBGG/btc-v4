@@ -1,65 +1,24 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTheme } from "../stores/theme.store";
-// import { mockParticipants } from "../data/mockParticipants";
-import { getActivitiesApi } from "../services/get_activitys_staff";
-import api from "../services/api";
-import { body } from "motion/react-client";
-type Registration = {
-  id: number;
-  userId: number;
-  registerId: string;
-  studentId: string;
-  name: string;
-  faculty: string;
-  nameactivity: string;
-  type: string;
-  major: string;
-  status: string;
-  // ใส่ fields อื่น ๆ ถ้ามี
-};
-function addRegistration(datass: Registration) {
-  registrations.push(datass);
-}
-
-let registrations: Registration[] = [];
-// ประเภทข้อมูลสำหรับผู้เข้าร่วมกิจกรรม
-interface ParticipantItem {
-  id: string;
-  userId: string;
-  registerId: string;
-  name: string;
-  studentId: string;
-  eventType: "อบรม" | "อาสา" | "ช่วยงาน";
-  eventTitle: string;
-  faculty: string;
-  major: string;
-  registrationDate: string;
-  attendanceStatus: "approved" | "rejected" | "pending";
-}
-
-// ประเภทข้อมูลสำหรับกิจกรรม
-interface ActivityDetail {
-  id: string;
-  title: string;
-  eventType: "อบรม" | "อาสา" | "ช่วยงาน";
-  startDate: string;
-  endDate: string;
-  status: "รับสมัคร" | "กำลังดำเนินการ" | "เสร็จสิ้น" | "ยกเลิก";
-  participants: number;
-  maxParticipants: number;
-}
+import { 
+  getActivitiesApi, 
+  getPendingApprovals, 
+  updateApprovalStatus,
+  ApprovalRequest
+} from "../services/get_activitys_staff";
 
 // ประเภทสำหรับการเรียงข้อมูล
 type SortField =
-  | "name"
+  | "studentName"
   | "studentId"
   | "faculty"
   | "major"
-  | "registrationDate"
-  | "attendanceStatus"
+  | "requestDate"
+  | "status"
   | "eventTitle"
   | "eventType";
+  
 type SortOrder = "asc" | "desc";
 
 function ApprovalRequestsPage() {
@@ -67,110 +26,35 @@ function ApprovalRequestsPage() {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
-  const [activityDetail, setActivityDetail] = useState<ActivityDetail | null>(
-    null
-  );
-  const [participants, setParticipants] = useState<ParticipantItem[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState<SortField>("registrationDate");
+  const [sortField, setSortField] = useState<SortField>("requestDate");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [filterType, setFilterType] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
-  const get = async () => {
-    const response = await getActivitiesApi();
-    console.log('getActivitiesApi 3:', response);
-    const data = response.participants.map((value: any) => {
-      const date = new Date(value.registationDate);
-      const formattedDate = date.toLocaleString("th-TH", {
-        timeZone: "Asia/Bangkok",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
-      return {
-        id: value.activityId,
-        userId: value.userId,
-        registerId: value.registrationId,
-        name: value.fullName,
-        studentId: value.studentId,
-        eventType: value.activityType,
-        eventTitle: value.activityName, // เพิ่มชื่อกิจกรรม
-        faculty: value.facultyName,
-        major: value.majorName,
-        registrationDate: formattedDate, // แสดงเฉพาะวันที่
-        attendanceStatus: value.registrationStatus,
-      };
-    })
-    console.log('getActivitiesApi 2:', data);
+  const fetchApprovalRequests = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const pendingRequests = await getPendingApprovals();
+      setApprovalRequests(pendingRequests);
+    } catch (err) {
+      console.error("Error fetching approval requests:", err);
+      setError("เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    setParticipants(data);
-    // setParticipants();
-    // console.log(response.paticipants.map((value)=>{
-    //   return{
-    //   id: value.activityId,
-    //   name: value.firstName + " " + value.lastName,
-    //   studentId: value.studentId,
-    //   eventType: 'อบรม',
-    //   eventTitle: value.activityTitle, // เพิ่มชื่อกิจกรรม
-    //   faculty: string;
-    //   major: string;
-    //   registrationDate: string;
-    //   attendanceStatus: "มาเข้าร่วม" | "ไม่ได้เข้าร่วม" | "รอเข้าร่วม";
-    //   }
-    // }));
-
-
-  }
-
-
-  // โหลด activities เมื่อ component mount
+  // โหลดข้อมูลเมื่อ component mount
   useEffect(() => {
-    get();
+    fetchApprovalRequests();
   }, []);
-
-
-
-  // โหลดข้อมูลกิจกรรมและผู้เข้าร่วม
-  useEffect(() => {
-    // จำลองการโหลดข้อมูล (ในระบบจริงควรใช้ API)
-    setLoading(true);
-
-    // จำลองข้อมูลรายละเอียดกิจกรรม
-    const mockActivityDetail: ActivityDetail = {
-      id: id || "1",
-      title:
-        id === "1"
-          ? "BootCampCPE"
-          : id === "2"
-            ? "ปลูกป่าชายเลนเพื่อโลกสีเขียว"
-            : id === "3"
-              ? "งานวิ่งการกุศล Run for Wildlife"
-              : `กิจกรรม ${id}`,
-      eventType:
-        id === "1"
-          ? "อบรม"
-          : id === "2"
-            ? "อาสา"
-            : id === "3"
-              ? "ช่วยงาน"
-              : "อบรม",
-      startDate: "17/05/2568",
-      endDate: "18/05/2568",
-      status: "รับสมัคร",
-      participants: 25,
-      maxParticipants: 30,
-    };
-
-    setActivityDetail(mockActivityDetail);
-    // setParticipants(mockParticipants);
-    setLoading(false);
-  }, [id]);
 
   //สีประเภทกิจกรรม
   const eventTypeColor = (type: string) => {
@@ -193,7 +77,7 @@ function ApprovalRequestsPage() {
   };
 
   // ฟังก์ชันเรียงข้อมูล
-  const sortParticipants = (field: SortField) => {
+  const sortRequests = (field: SortField) => {
     if (sortField === field) {
       // ถ้าคลิกที่ฟิลด์เดิม ให้สลับลำดับการเรียง
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -210,101 +94,82 @@ function ApprovalRequestsPage() {
     registerId: string,
     status: "approved" | "rejected"
   ) => {
-    // อัพเดทสถานะของผู้เข้าร่วม
-    const updatedParticipants = participants.map((participant) =>
-      participant.id === registerId
-        ? { ...participant, attendanceStatus: status }
-        : participant
-    );
-
-    const data = localStorage.getItem("authData");
-const parsedData = data ? JSON.parse(data) : null;
-const token = parsedData?.token || "";
-
-console.log("Token:", token);
-
-// หลังจากอัพเดทสถานะ ให้นำผู้เข้าร่วมที่มีสถานะ "รอเข้าร่วม" มาแสดงเท่านั้น
-setParticipants(updatedParticipants);
-
-// แก้ไขตรงนี้ - แยก headers และ body ให้ถูกต้อง
-const response = await api.put(
-  `/api/activities/${id}/registrations/${registerId}`,
-  { status: status }, // นี่คือ body ที่ถูกต้อง
-  { 
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  }
-);
-
-    if (response.status === 200) {
-      // อัพเดทสถานะในฐานข้อมูล
-      const updatedParticipant = updatedParticipants.find(
-        (participant) => participant.id === registerId
-      );
-      if (updatedParticipant) {
-        updatedParticipant.attendanceStatus = status;
+    try {
+      const success = await updateApprovalStatus(id, registerId, status);
+      
+      if (success) {
+        // อัพเดทสถานะในรายการของเรา
+        setApprovalRequests(prevRequests => 
+          prevRequests.filter(request => request.registrationId !== registerId)
+        );
+        
+        // แจ้งเตือนว่าได้ดำเนินการเรียบร้อยแล้ว
+        if (status === "approved") {
+          alert(`อนุมัติการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
+        } else {
+          alert(`ปฏิเสธการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
+        }
+      } else {
+        alert("เกิดข้อผิดพลาดในการอัพเดทสถานะ กรุณาลองใหม่อีกครั้ง");
       }
-    }
-
-    // แจ้งเตือนว่าได้ดำเนินการเรียบร้อยแล้ว
-    if (status === "approved") {
-      alert(`อนุมัติการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
-    } else {
-      alert(`ปฏิเสธการเข้าร่วมกิจกรรมเรียบร้อยแล้ว`);
+    } catch (err) {
+      console.error("Error updating approval status:", err);
+      alert("เกิดข้อผิดพลาดในการอัพเดทสถานะ กรุณาลองใหม่อีกครั้ง");
     }
   };
 
   // ส่วนของการกรองข้อมูลก่อนแสดงผล
-  const filteredAndSortedParticipants = participants
+  const filteredAndSortedRequests = approvalRequests
     .filter(
-      (participant) =>
-        (participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          participant.studentId.includes(searchTerm) ||
-          participant.faculty
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          participant.major.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          participant.eventTitle
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())) &&
-        participant.attendanceStatus === "pending" &&
-        (filterType === "" || participant.eventType === filterType) // เพิ่มการกรองตามประเภทกิจกรรม
+      (request) =>
+        (request.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          request.studentId.includes(searchTerm) ||
+          request.eventTitle.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (filterType === "" || request.status === filterType)
     )
     .sort((a, b) => {
-      // โค้ดการเรียงลำดับยังคงเหมือนเดิม...
-      const compareA = String(a[sortField]).toLowerCase();
-      const compareB = String(b[sortField]).toLowerCase();
-
-      if (compareA < compareB) {
-        return sortOrder === "asc" ? -1 : 1;
+      // ตัวอย่างการเรียงข้อมูลตามฟิลด์ที่เลือก
+      if (sortField === "studentName") {
+        return sortOrder === "asc"
+          ? a.studentName.localeCompare(b.studentName)
+          : b.studentName.localeCompare(a.studentName);
+      } else if (sortField === "studentId") {
+        return sortOrder === "asc"
+          ? a.studentId.localeCompare(b.studentId)
+          : b.studentId.localeCompare(a.studentId);
+      } else if (sortField === "eventTitle") {
+        return sortOrder === "asc"
+          ? a.eventTitle.localeCompare(b.eventTitle)
+          : b.eventTitle.localeCompare(a.eventTitle);
+      } else if (sortField === "requestDate") {
+        // แปลงวันที่เป็น timestamp เพื่อเปรียบเทียบ
+        const dateA = new Date(a.requestDate.split('/').reverse().join('-')).getTime();
+        const dateB = new Date(b.requestDate.split('/').reverse().join('-')).getTime();
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
       }
-      if (compareA > compareB) {
-        return sortOrder === "asc" ? 1 : -1;
-      }
+      // ถ้าไม่ตรงกับเงื่อนไขข้างต้น ให้เรียงตาม requestDate
       return 0;
     });
 
   // คำนวณหน้าปัจจุบัน
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredAndSortedParticipants.slice(
+  const currentItems = filteredAndSortedRequests.slice(
     indexOfFirstItem,
     indexOfLastItem
   );
   const totalPages = Math.ceil(
-    filteredAndSortedParticipants.length / itemsPerPage
+    filteredAndSortedRequests.length / itemsPerPage
   );
 
   // สีสถานะการเข้าร่วม
   const attendanceStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
+      case "อนุมัติ":
         return theme === "dark" ? "text-green-400" : "text-green-600";
-      case "rejected":
+      case "ปฏิเสธ":
         return theme === "dark" ? "text-red-400" : "text-red-600";
-      case "pending":
+      case "รอการอนุมัติ":
         return theme === "dark" ? "text-yellow-400" : "text-yellow-600";
       default:
         return "";
@@ -322,43 +187,20 @@ const response = await api.put(
   if (loading) {
     return (
       <div
-        className={`min-h-screen flex items-center justify-center ${theme === "dark"
-            ? "bg-gray-900 text-white"
-            : "bg-gray-50 text-gray-800"
-          }`}
+        className={`min-h-screen flex items-center justify-center ${
+          theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"
+        }`}
       >
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  // ถ้าไม่พบข้อมูลกิจกรรม
-  if (!activityDetail) {
-    return (
-      <div
-        className={`min-h-screen flex flex-col items-center justify-center ${theme === "dark"
-            ? "bg-gray-900 text-white"
-            : "bg-gray-50 text-gray-800"
-          }`}
-      >
-        <h1 className="text-2xl font-bold mb-4">ไม่พบข้อมูลกิจกรรม</h1>
-        <button
-          onClick={() => navigate("/staff/activities")}
-          className={`px-4 py-2 rounded-md ${theme === "dark"
-              ? "bg-blue-600 hover:bg-blue-700"
-              : "bg-blue-600 hover:bg-blue-700"
-            } text-white`}
-        >
-          กลับไปหน้ารายการกิจกรรม
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div
-      className={`min-h-screen p-6 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"
-        }`}
+      className={`min-h-screen p-6 ${
+        theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-800"
+      }`}
     >
       <div className="container mx-auto">
         {/* ส่วนหัวของหน้า - แสดงข้อมูลกิจกรรม */}
@@ -366,8 +208,9 @@ const response = await api.put(
           <div className="flex items-center mb-2">
             <button
               onClick={() => navigate("/staff/activities")}
-              className={`mr-4 p-2 rounded-full ${theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-200"
-                }`}
+              className={`mr-4 p-2 rounded-full ${
+                theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-200"
+              }`}
             >
               <svg
                 className="w-6 h-6"
@@ -387,6 +230,18 @@ const response = await api.put(
           </div>
         </div>
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
+            <p>{error}</p>
+            <button 
+              onClick={fetchApprovalRequests}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        )}
+
         {/* ส่วนค้นหาและตัวกรอง */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
@@ -395,10 +250,11 @@ const response = await api.put(
               placeholder="ค้นหาผู้เข้าร่วม..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full px-4 py-2 rounded-md ${theme === "dark"
+              className={`w-full px-4 py-2 rounded-md ${
+                theme === "dark"
                   ? "bg-gray-800 border-gray-700 text-white placeholder-gray-400"
                   : "bg-white border-gray-300 text-gray-900 placeholder-gray-500"
-                } border`}
+              } border`}
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3">
               <svg
@@ -421,23 +277,25 @@ const response = await api.put(
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className={`w-full px-4 py-2 rounded-md ${theme === "dark"
+              className={`w-full px-4 py-2 rounded-md ${
+                theme === "dark"
                   ? "bg-gray-800 border-gray-700 text-white"
                   : "bg-white border-gray-300 text-gray-900"
-                } border`}
+              } border`}
             >
-              <option value="">ทุกประเภท</option>
-              <option value="อบรม">อบรม</option>
-              <option value="อาสา">อาสา</option>
-              <option value="ช่วยงาน">ช่วยงาน</option>
+              <option value="">ทุกสถานะ</option>
+              <option value="รอการอนุมัติ">รอการอนุมัติ</option>
+              <option value="อนุมัติ">อนุมัติ</option>
+              <option value="ปฏิเสธ">ปฏิเสธ</option>
             </select>
           </div>
         </div>
 
         {/* ตารางแสดงรายชื่อผู้เข้าร่วม */}
         <div
-          className={`overflow-x-auto rounded-lg border ${theme === "dark" ? "border-gray-700" : "border-gray-200"
-            }`}
+          className={`overflow-x-auto rounded-lg border ${
+            theme === "dark" ? "border-gray-700" : "border-gray-200"
+          }`}
         >
           <table className="min-w-full divide-y divide-gray-200">
             <thead className={`${getHeaderBarColor()} text-white`}>
@@ -445,11 +303,11 @@ const response = await api.put(
                 <th
                   scope="col"
                   className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("name")}
+                  onClick={() => sortRequests("studentName")}
                 >
                   <div className="flex items-center">
                     ชื่อผู้สมัคร
-                    {sortField === "name" && (
+                    {sortField === "studentName" && (
                       <span className="ml-1">
                         {sortOrder === "asc" ? "↑" : "↓"}
                       </span>
@@ -459,7 +317,7 @@ const response = await api.put(
                 <th
                   scope="col"
                   className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("studentId")}
+                  onClick={() => sortRequests("studentId")}
                 >
                   <div className="flex items-center">
                     รหัสนิสิต
@@ -473,7 +331,7 @@ const response = await api.put(
                 <th
                   scope="col"
                   className="px-6 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("eventTitle")}
+                  onClick={() => sortRequests("eventTitle")}
                 >
                   <div className="flex items-center">
                     ชื่อกิจกรรม
@@ -486,54 +344,12 @@ const response = await api.put(
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("eventType")}
-                >
-                  <div className="flex items-center">
-                    ประเภทกิจกรรม
-                    {sortField === "eventType" && (
-                      <span className="ml-1">
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  scope="col"
                   className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("faculty")}
-                >
-                  <div className="flex items-center">
-                    คณะ/วิทยาลัย
-                    {sortField === "faculty" && (
-                      <span className="ml-1">
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("major")}
-                >
-                  <div className="flex items-center">
-                    สาขา
-                    {sortField === "major" && (
-                      <span className="ml-1">
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("registrationDate")}
+                  onClick={() => sortRequests("requestDate")}
                 >
                   <div className="flex items-center">
                     วันที่สมัคร
-                    {sortField === "registrationDate" && (
+                    {sortField === "requestDate" && (
                       <span className="ml-1">
                         {sortOrder === "asc" ? "↑" : "↓"}
                       </span>
@@ -543,11 +359,11 @@ const response = await api.put(
                 <th
                   scope="col"
                   className="px-4 py-3 text-left text-sm font-medium cursor-pointer"
-                  onClick={() => sortParticipants("attendanceStatus")}
+                  onClick={() => sortRequests("status")}
                 >
                   <div className="flex items-center">
                     สถานะการเข้าร่วม
-                    {sortField === "attendanceStatus" && (
+                    {sortField === "status" && (
                       <span className="ml-1">
                         {sortOrder === "asc" ? "↑" : "↓"}
                       </span>
@@ -563,67 +379,44 @@ const response = await api.put(
               </tr>
             </thead>
             <tbody
-              className={`divide-y ${theme === "dark"
+              className={`divide-y ${
+                theme === "dark"
                   ? "divide-gray-700 bg-gray-800"
                   : "divide-gray-200 bg-white"
-                }`}
+              }`}
             >
               {currentItems.length > 0 ? (
-                currentItems.map((participant, index) => (
+                currentItems.map((request, index) => (
                   <tr
-                    key={participant.id}
-                    className={`hover:${theme === "dark" ? "bg-gray-700" : "bg-gray-50"
-                      }`}
+                    key={request.id}
+                    className={`hover:${
+                      theme === "dark" ? "bg-gray-700" : "bg-gray-50"
+                    }`}
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                      {participant.name}
+                      {request.studentName}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      {participant.studentId}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <div
-                        className="truncate max-w-[150px]"
-                        title={participant.eventTitle}
-                      >
-                        {participant.eventTitle}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${eventTypeColor(
-                          participant.eventType
-                        )}`}
-                      >
-                        {participant.eventType}
-                      </span>
+                      {request.studentId}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div
                         className="truncate max-w-[150px]"
-                        title={participant.faculty}
+                        title={request.eventTitle}
                       >
-                        {participant.faculty}
+                        {request.eventTitle}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <div
-                        className="truncate max-w-[150px]"
-                        title={participant.major}
-                      >
-                        {participant.major}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      {participant.registrationDate}
+                      {request.requestDate}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <span
                         className={`font-medium ${attendanceStatusColor(
-                          participant.attendanceStatus
+                          request.status
                         )}`}
                       >
-                        {participant.attendanceStatus}
+                        {request.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -631,12 +424,17 @@ const response = await api.put(
                         {/* ปุ่มอนุมัติ */}
                         <button
                           onClick={() =>
-                            handleAttendanceChange(participant.id, participant.registerId, "approved")
+                            handleAttendanceChange(
+                              request.activityId, 
+                              request.registrationId, 
+                              "approved"
+                            )
                           }
-                          className={`p-1 rounded-full ${theme === "dark"
+                          className={`p-1 rounded-full ${
+                            theme === "dark"
                               ? "text-green-400 hover:bg-gray-700"
                               : "text-green-600 hover:bg-gray-200"
-                            }`}
+                          }`}
                           title="อนุมัติ"
                         >
                           <svg
@@ -659,14 +457,16 @@ const response = await api.put(
                         <button
                           onClick={() =>
                             handleAttendanceChange(
-                              participant.id, participant.registerId,
+                              request.activityId,
+                              request.registrationId,
                               "rejected"
                             )
                           }
-                          className={`p-1 rounded-full ${theme === "dark"
+                          className={`p-1 rounded-full ${
+                            theme === "dark"
                               ? "text-red-400 hover:bg-gray-700"
                               : "text-red-600 hover:bg-gray-200"
-                            }`}
+                          }`}
                           title="ปฏิเสธ"
                         >
                           <svg
@@ -691,7 +491,7 @@ const response = await api.put(
               ) : (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={6}
                     className="px-6 py-4 text-center text-sm font-medium"
                   >
                     ไม่พบรายชื่อผู้เข้าร่วมกิจกรรมที่ตรงกับเงื่อนไขการค้นหา
@@ -703,7 +503,7 @@ const response = await api.put(
         </div>
 
         {/* Pagination */}
-        {filteredAndSortedParticipants.length > 0 && (
+        {filteredAndSortedRequests.length > 0 && (
           <div className="flex justify-center mt-6">
             <nav className="flex items-center space-x-2">
               <button
@@ -711,13 +511,15 @@ const response = await api.put(
                   setCurrentPage(currentPage > 1 ? currentPage - 1 : 1)
                 }
                 disabled={currentPage === 1}
-                className={`px-3 py-1 rounded-md ${currentPage === 1
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === 1
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-gray-200"
-                  } ${theme === "dark"
+                } ${
+                  theme === "dark"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
                     : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                  }`}
+                }`}
                 aria-label="Previous page"
               >
                 <svg
@@ -750,14 +552,15 @@ const response = await api.put(
                   <button
                     key={i}
                     onClick={() => setCurrentPage(pageNumber)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-md ${currentPage === pageNumber
+                    className={`w-8 h-8 flex items-center justify-center rounded-md ${
+                      currentPage === pageNumber
                         ? theme === "dark"
                           ? "bg-blue-600 text-white"
                           : "bg-blue-600 text-white"
                         : theme === "dark"
                           ? "bg-gray-700 text-white hover:bg-gray-600"
                           : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                      }`}
+                    }`}
                     aria-label={`Page ${pageNumber}`}
                     aria-current={
                       currentPage === pageNumber ? "page" : undefined
@@ -775,13 +578,15 @@ const response = await api.put(
                   )
                 }
                 disabled={currentPage === totalPages}
-                className={`px-3 py-1 rounded-md ${currentPage === totalPages
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === totalPages
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-gray-200"
-                  } ${theme === "dark"
+                } ${
+                  theme === "dark"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
                     : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                  }`}
+                }`}
                 aria-label="Next page"
               >
                 <svg
@@ -806,35 +611,3 @@ const response = await api.put(
 }
 
 export default ApprovalRequestsPage;
-
-{
-  /* ปุ่มบันทึกไม่เข้าร่วม 
-  <button
-  onClick={() => handleAttendanceChange(participant.id, "ไม่ได้เข้าร่วม")}
-  disabled={participant.attendanceStatus === "ไม่ได้เข้าร่วม"}
-  className={`p-1 rounded-full ${
-    participant.attendanceStatus === "ไม่ได้เข้าร่วม"
-      ? "opacity-50 cursor-not-allowed"
-      : theme === "dark"
-      ? "text-red-400 hover:bg-gray-700"
-      : "text-red-600 hover:bg-gray-200"
-  }`}
-  title="บันทึกไม่เข้าร่วม"
->
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-5 w-5"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M6 18L18 6M6 6l12 12"
-    />
-  </svg>
-</button>;
-*/
-}
