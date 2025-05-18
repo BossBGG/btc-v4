@@ -2,30 +2,11 @@
 import api from './api';
 
 // ฟังก์ชันดึงข้อมูลกิจกรรมทั้งหมด
-export const getAllActivities = async (token: string = '') => {
+export const getAllActivities = async (token?: string) => {
   try {
-    let headers = {};
-    
-    // ถ้าไม่มี token ที่ส่งมา ลองดึงจาก localStorage
-    if (!token) {
-      const authData = localStorage.getItem('authData');
-      if (authData) {
-        try {
-          const parsedAuthData = JSON.parse(authData);
-          if (parsedAuthData && parsedAuthData.token) {
-            token = parsedAuthData.token;
-          }
-        } catch (e) {
-          console.error('Failed to parse auth data:', e);
-        }
-      }
-    }
-    
-    // ถ้ามี token ให้เพิ่มใน headers
+    const headers: Record<string, string> = {};
     if (token) {
-      headers = {
-        Authorization: `Bearer ${token}`
-      };
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await api.get('/api/activities', { headers });
@@ -37,30 +18,11 @@ export const getAllActivities = async (token: string = '') => {
 };
 
 // ฟังก์ชันดึงข้อมูลกิจกรรมตาม ID
-export const getActivityById = async (id: string | number, token: string = '') => {
+export const getActivityById = async (id: string | number, token?: string) => {
   try {
-    let headers = {};
-    
-    // ถ้าไม่มี token ที่ส่งมา ลองดึงจาก localStorage
-    if (!token) {
-      const authData = localStorage.getItem('authData');
-      if (authData) {
-        try {
-          const parsedAuthData = JSON.parse(authData);
-          if (parsedAuthData && parsedAuthData.token) {
-            token = parsedAuthData.token;
-          }
-        } catch (e) {
-          console.error('Failed to parse auth data:', e);
-        }
-      }
-    }
-    
-    // ถ้ามี token ให้เพิ่มใน headers
+    const headers: Record<string, string> = {};
     if (token) {
-      headers = {
-        Authorization: `Bearer ${token}`
-      };
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await api.get(`/api/activities/${id}`, { headers });
@@ -72,34 +34,15 @@ export const getActivityById = async (id: string | number, token: string = '') =
 };
 
 // ฟังก์ชันค้นหากิจกรรม
-export const searchActivities = async (searchTerm: string, token: string = '') => {
+export const searchActivities = async (searchTerm: string, token?: string) => {
   try {
-    let headers = {};
-    
-    // ถ้าไม่มี token ที่ส่งมา ลองดึงจาก localStorage
-    if (!token) {
-      const authData = localStorage.getItem('authData');
-      if (authData) {
-        try {
-          const parsedAuthData = JSON.parse(authData);
-          if (parsedAuthData && parsedAuthData.token) {
-            token = parsedAuthData.token;
-          }
-        } catch (e) {
-          console.error('Failed to parse auth data:', e);
-        }
-      }
-    }
-    
-    // ถ้ามี token ให้เพิ่มใน headers
-    if (token) {
-      headers = {
-        Authorization: `Bearer ${token}`
-      };
-    }
-    
     // สร้าง URL สำหรับการค้นหา
     const url = `/api/activities?search=${encodeURIComponent(searchTerm)}`;
+    
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     
     const response = await api.get(url, { headers });
     return response.data;
@@ -110,30 +53,11 @@ export const searchActivities = async (searchTerm: string, token: string = '') =
 };
 
 // ฟังก์ชันกรองกิจกรรมตามประเภท
-export const getActivitiesByType = async (typeId: number, token: string = '') => {
+export const getActivitiesByType = async (typeId: number, token?: string) => {
   try {
-    let headers = {};
-    
-    // ถ้าไม่มี token ที่ส่งมา ลองดึงจาก localStorage
-    if (!token) {
-      const authData = localStorage.getItem('authData');
-      if (authData) {
-        try {
-          const parsedAuthData = JSON.parse(authData);
-          if (parsedAuthData && parsedAuthData.token) {
-            token = parsedAuthData.token;
-          }
-        } catch (e) {
-          console.error('Failed to parse auth data:', e);
-        }
-      }
-    }
-    
-    // ถ้ามี token ให้เพิ่มใน headers
+    const headers: Record<string, string> = {};
     if (token) {
-      headers = {
-        Authorization: `Bearer ${token}`
-      };
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await api.get(`/api/activities?typeId=${typeId}`, { headers });
@@ -145,32 +69,11 @@ export const getActivitiesByType = async (typeId: number, token: string = '') =>
 };
 
 // ฟังก์ชันลงทะเบียนเข้าร่วมกิจกรรม
-export const registerForActivity = async (activityId: number, token: string = '') => {
+export const registerForActivity = async (activityId: number, token?: string) => {
   try {
-    let headers = {};
-    
-    // ถ้าไม่มี token ที่ส่งมา ลองดึงจาก localStorage
-    if (!token) {
-      const authData = localStorage.getItem('authData');
-      if (authData) {
-        try {
-          const parsedAuthData = JSON.parse(authData);
-          if (parsedAuthData && parsedAuthData.token) {
-            token = parsedAuthData.token;
-          }
-        } catch (e) {
-          console.error('Failed to parse auth data:', e);
-        }
-      }
-    }
-    
-    // ถ้ามี token ให้เพิ่มใน headers
+    const headers: Record<string, string> = {};
     if (token) {
-      headers = {
-        Authorization: `Bearer ${token}`
-      };
-    } else {
-      throw new Error('No authentication token available');
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await api.post(`/api/activities/${activityId}/register`, {}, { headers });
@@ -184,13 +87,11 @@ export const registerForActivity = async (activityId: number, token: string = ''
 // Helper functions สำหรับการกรองกิจกรรม
 // กรองเฉพาะกิจกรรมที่มีสถานะ "approved" สำหรับผู้ใช้ทั่วไป
 export const filterApprovedActivities = (activities: any[]) => {
-  if (!Array.isArray(activities)) return [];
   return activities.filter(activity => activity.status === 'approved');
 };
 
 // กรองกิจกรรมที่ไม่ได้อยู่ในสถานะ closed หรือ cancelled
 export const filterActiveActivities = (activities: any[]) => {
-  if (!Array.isArray(activities)) return [];
   return activities.filter(activity => 
     activity.status !== 'closed' && 
     activity.status !== 'cancelled'
@@ -199,8 +100,6 @@ export const filterActiveActivities = (activities: any[]) => {
 
 // แปลงเวลาให้อยู่ในรูปแบบที่อ่านง่าย
 export const formatDateTime = (dateTimeString: string) => {
-  if (!dateTimeString) return '';
-  
   const date = new Date(dateTimeString);
   
   const day = date.getDate().toString().padStart(2, '0');

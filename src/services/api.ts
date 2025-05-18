@@ -1,53 +1,59 @@
 // src/services/api.ts
 import axios from 'axios';
 
+// ตรวจสอบให้แน่ใจว่า baseURL ตรงกับที่เห็นใน Swagger
 const api = axios.create({
-  baseURL: 'https://bootcampp.karinwdev.site/api/',
+  baseURL: 'https://bootcampp.karinwdev.site', // ตรงตาม URL ใน Swagger
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add request interceptor to automatically add auth token
-api.interceptors.request.use((config) => {
-  const authData = localStorage.getItem('authData');
-  console.log('Request interceptor - Auth data:', authData ? 'present' : 'missing');
-  
-  if (authData) {
+// เพิ่ม interceptor สำหรับแนบ token อัตโนมัติกับทุก request
+api.interceptors.request.use(
+  (config) => {
+    // ดึง token จาก localStorage
     try {
-      const { token } = JSON.parse(authData);
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log('Request interceptor - Added token to request');
-      } else {
-        console.warn('Request interceptor - No token in auth data');
+      const authData = localStorage.getItem('authData');
+      if (authData) {
+        const { token } = JSON.parse(authData);
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       }
-    } catch (e) {
-      console.error('Request interceptor - Error parsing auth data:', e);
+    } catch (error) {
+      console.error('Error reading token from localStorage:', error);
     }
+    
+    // แก้ไขการใช้ substring เพื่อหลีกเลี่ยง TypeScript error
+    const authHeader = config.headers.Authorization;
+    const authHeaderStr = authHeader ? 
+      (typeof authHeader === 'string' ? 
+        `Auth header: ${authHeader.substring(0, 20)}...` : 
+        `Auth header: ${String(authHeader).substring(0, 20)}...`) : 
+      'No Auth header';
+      
+    console.log(`Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
+      config.data, 
+      authHeaderStr);
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-}, (error) => {
-  console.error('Request interceptor - Error:', error);
-  return Promise.reject(error);
-});
+);
 
-// Add response interceptor for better error handling
+// เพิ่ม Axios Response Logger เพื่อช่วยดีบัก
 api.interceptors.response.use(
   (response) => {
-    console.log(`API ${response.config.method?.toUpperCase()} ${response.config.url} success:`, {
-      status: response.status,
-      data: response.data
-    });
+    console.log(`Response: ${response.status}`, response.data);
     return response;
   },
   (error) => {
-    console.error(`API ${error.config?.method?.toUpperCase()} ${error.config?.url} error:`, {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message,
-      headers: error.config?.headers
-    });
+    console.error('API Error:', error.message);
+    if (error.response) {
+      console.error('Error Response:', error.response.status, error.response.data);
+    }
     return Promise.reject(error);
   }
 );

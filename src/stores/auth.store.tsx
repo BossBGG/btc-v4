@@ -1,3 +1,4 @@
+// src/stores/auth.store.tsx
 import { createContext, useEffect, useState, ReactNode } from 'react';
 
 const LOCAL_STORAGE_KEY = 'authData';
@@ -5,7 +6,7 @@ const LOCAL_STORAGE_KEY = 'authData';
 // Define user role types
 export type UserRole = 'student' | 'staff' | 'admin';
 
-interface UserData {
+export interface UserData {
   id: string;
   studentId: string;
   role: UserRole;
@@ -29,7 +30,8 @@ interface AuthStateProps {
   login: (userData: UserData, token: string) => void;
   logout: () => void;
   checkAuth: () => boolean;
-  hasAccess: (allowedRoles: UserRole[]) => boolean; // เพิ่มฟังก์ชันตรวจสอบสิทธิ์
+  hasAccess: (allowedRoles: UserRole[]) => boolean;
+  getToken: () => string | null;
 }
 
 export const AuthStore = createContext<AuthStateProps | undefined>(undefined);
@@ -40,6 +42,22 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  // ฟังก์ชันใหม่เพื่อเรียกใช้ token
+  const getToken = (): string | null => {
+    try {
+      const storedAuth = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (storedAuth) {
+        const authData: AuthData = JSON.parse(storedAuth);
+        return authData.token || null;
+      }
+      return token;
+    } catch (e) {
+      console.error("Error getting token:", e);
+      return null;
+    }
+  };
 
   // Check authentication status from localStorage
   const checkAuth = (): boolean => {
@@ -59,6 +77,7 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
           setUserId(authData.user.id);
           setStudentId(authData.user.studentId);
           setUserData(authData.user);
+          setToken(authData.token);
           return true;
         }
       }
@@ -81,24 +100,16 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
     // Load auth data on application start
     checkAuth();
   }, []);
-  const login = (user: UserData, token: string) => {
-    console.log('Login attempt with:', { 
-      userId: user.id,
-      studentId: user.studentId,
-      role: user.role,
-      hasToken: !!token
-    });
-    
-    if (!user || !token) {
-      console.error('Invalid login data:', { hasUser: !!user, hasToken: !!token });
-      return;
-    }
+
+  const login = (user: UserData, accessToken: string) => {
+    console.log('Login with user:', user);
     
     setIsAuthenticated(true);
     setUserRole(user.role);
     setUserId(user.id);
     setStudentId(user.studentId);
     setUserData(user);
+    setToken(accessToken);
     
     // Get refresh token if available
     const refreshToken = localStorage.getItem('refreshToken') || undefined;
@@ -106,7 +117,7 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
     // Save auth data to localStorage
     const authData: AuthData = { 
       user,
-      token,
+      token: accessToken,
       refreshToken
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(authData));
@@ -118,6 +129,7 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
     setUserId(null);
     setStudentId(null);
     setUserData(null);
+    setToken(null);
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     localStorage.removeItem('refreshToken');
   };
@@ -132,7 +144,8 @@ export const AuthStoreProvider = ({ children }: { children: ReactNode }) => {
       login, 
       logout, 
       checkAuth,
-      hasAccess // เพิ่มฟังก์ชันตรวจสอบสิทธิ์ในค่าที่ส่งออก
+      hasAccess,
+      getToken
     }}>
       {children}
     </AuthStore.Provider>
